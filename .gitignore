@@ -6,3 +6,17 @@ target/
 dbt_packages/
 logs/
 .user.yml
+
+# Generated ad feeds. A default-scale run produces millions of rows and hundreds of
+# megabytes; a volume run produces far more. The generator is deterministic given
+# --seed, so the data is reproducible from code and does not belong in version control.
+# schemas/ IS committed -- it is the data contract, and it is small.
+data/
+
+# Reports written by the checks. Regenerated on every run; useful as build output,
+# noise as repository history.
+validation_report.json
+quality_report.json
+anomaly_report.json
+lint_report.json
+attribution_validation.json

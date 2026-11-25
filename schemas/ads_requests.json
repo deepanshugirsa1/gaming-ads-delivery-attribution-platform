@@ -1,0 +1,47 @@
+[
+  {
+    "name": "request_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "request_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "user_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "server_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "placement",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "device_platform",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "country",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "eligible_campaign_count",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "ingest_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  }
+]

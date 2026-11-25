@@ -1,6 +1,16 @@
-# Local profile (DuckDB) so the whole project runs with no cloud cost.
-# Run dbt from this folder with:  dbt build --profiles-dir .
-gaming_engagement:
+# Both targets live in one profile so the same command runs against either warehouse
+# and nothing has to be edited to switch:
+#
+#   dbt build --profiles-dir .                      # DuckDB, local, no cost
+#   dbt build --profiles-dir . --target bigquery    # the real target
+#
+# BigQuery settings come from environment variables rather than being written here, so
+# no project id or credential ever lands in version control. Authentication is oauth,
+# which uses the credentials gcloud already has:
+#
+#   gcloud auth application-default login
+#   export BIGQUERY_PROJECT=your-project-id
+gaming_ads_platform:
   target: duckdb
   outputs:
     duckdb:
@@ -9,3 +19,16 @@ gaming_engagement:
       schema: main
       # single-threaded: dbt+duckdb multiprocessing can crash on Windows/OneDrive paths
       threads: 1
+
+    bigquery:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('BIGQUERY_PROJECT', 'unset-set-BIGQUERY_PROJECT') }}"
+      dataset: "{{ env_var('BIGQUERY_DATASET', 'gaming_ads_platform') }}"
+      location: "{{ env_var('BIGQUERY_LOCATION', 'US') }}"
+      threads: 8
+      priority: interactive
+      job_retries: 1
+      # Keeps a runaway query from quietly spending the free tier. The whole project
+      # at default scale scans well under this.
+      maximum_bytes_billed: 100000000000

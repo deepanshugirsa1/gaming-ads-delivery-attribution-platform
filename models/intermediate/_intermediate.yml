@@ -27,3 +27,22 @@ models:
           - not_null
           - accepted_values:
               values: ["message", "voice", "game_session", "server_join"]
+
+  - name: int_user_engagement_trailing_7d
+    description: >
+      Prior-7-day engagement per user as of each active day. The bridge between the
+      engagement and advertising halves of the platform: the ads ranking features need
+      a description of the user as it stood before the ad request, and taking it from
+      fct_user_engagement_daily means the ads side inherits the governed DAU and
+      voice-minute definitions instead of recomputing activity its own way.
+    columns:
+      - name: user_id
+        tests: [not_null]
+      - name: as_of_date
+        tests: [not_null]
+      - name: prior_7d_messages_sent
+        tests: [not_null, non_negative]
+      - name: prior_7d_voice_minutes
+        tests: [not_null, non_negative]
+      - name: prior_7d_active_days
+        tests: [not_null, non_negative]

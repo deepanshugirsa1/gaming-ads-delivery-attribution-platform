@@ -1,0 +1,27 @@
+[
+  {
+    "name": "advertiser_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "advertiser_name",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "vertical",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "advertiser_tier",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "created_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  }
+]

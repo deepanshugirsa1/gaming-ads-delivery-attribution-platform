@@ -1,5 +1,13 @@
+# Local development runs on DuckDB so the whole project builds at no cost.
 dbt-core==1.8.7
 dbt-duckdb==1.8.4
 duckdb==1.1.3
+
+# The real target. Installed by default because the point of this project is that the
+# same models run on both, and a dependency that is only installed when you remember
+# to is a dependency that is not tested.
+dbt-bigquery==1.8.3
+
+# Event generation and the checks in scripts/.
 numpy==2.1.3
 pandas==2.2.3

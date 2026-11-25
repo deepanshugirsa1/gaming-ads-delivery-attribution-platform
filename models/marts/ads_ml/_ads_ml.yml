@@ -1,0 +1,109 @@
+version: 2
+
+models:
+  - name: fct_ranking_features
+    description: >
+      Ranking features at bid grain -- every (request, campaign) the auction
+      considered, not just the winners, so a successor model can learn about ads the
+      incumbent keeps rejecting. Every column is computable at request time.
+    columns:
+      - name: bid_id
+        tests: [unique, not_null]
+      - name: requested_date
+        tests: [not_null]
+      - name: predicted_ctr
+        description: >
+          The incumbent ranker's own score. A legitimate feature -- it was genuinely
+          available at auction time -- and also how a successor inherits its
+          predecessor's biases. Named and documented rather than buried.
+        tests: [not_null, non_negative]
+      - name: request_day_of_week
+        description: >
+          Derived by counting days from a known Sunday, not EXTRACT(DAYOFWEEK), which
+          numbers the week differently on BigQuery and DuckDB and would make the same
+          feature take different values per warehouse.
+        tests: [not_null, non_negative]
+      - name: account_age_days
+        tests: [not_null]
+      - name: user_prior_7d_messages_sent
+        tests: [not_null, non_negative]
+      - name: campaign_prior_7d_impressions
+        tests: [not_null, non_negative]
+      - name: campaign_prior_7d_ctr
+        description: "Null for a cold-start campaign. Zero would teach the model new campaigns never convert."
+      - name: user_campaign_prior_7d_impressions
+        description: "Creative fatigue. Strictly prior days only."
+        tests: [not_null, non_negative]
+
+  - name: fct_ranking_labels
+    description: >
+      Outcomes per bid with maturity stated explicitly. The three labels mature
+      seconds, minutes and a week apart, and treating them as equally final is the
+      classic way to poison a training set.
+    columns:
+      - name: bid_id
+        tests: [unique, not_null]
+      - name: was_served
+        tests: [not_null]
+      - name: was_clicked
+        tests: [not_null]
+      - name: was_attributed_conversion
+        tests: [not_null]
+      - name: is_conversion_label_mature
+        description: >
+          False means a 'no' is really 'not yet'. Enforced by a singular test, because
+          this is the guard someone removes to get more training data.
+        tests: [not_null]
+      - name: attributed_conversions
+        tests: [not_null, non_negative]
+
+  - name: mart_ml_training_set
+    description: >
+      Features joined to labels with a time-based split. Random splitting would put
+      near-identical rows from the same user on both sides and flatter the holdout.
+      Filtered to where the click label is final; conversion maturity is a column so a
+      week of good click data is not thrown away.
+    columns:
+      - name: bid_id
+        tests: [unique, not_null]
+      - name: dataset_split
+        tests:
+          - not_null
+          - accepted_values: {values: ["train", "holdout"]}
+      - name: was_clicked
+        tests: [not_null]
+      - name: is_conversion_label_mature
+        tests: [not_null]
+
+  - name: mart_ml_feature_health_daily
+    description: >
+      Per-feature daily completeness, distribution and drift against each feature's own
+      trailing baseline. Catches the failure dbt tests cannot: rows all present, values
+      silently null, model quietly degrading.
+    columns:
+      - name: as_of_date
+        tests: [not_null]
+      - name: feature_name
+        tests: [not_null]
+      - name: null_rate
+        tests: [not_null, non_negative]
+      - name: is_constant
+        description: "No variation at all: usually a broken join or a forgotten constant."
+        tests: [not_null]
+      - name: is_null_rate_breach
+        tests: [not_null]
+      - name: is_drift_breach
+        description: "Compared against its own trailing week, so a real launch is not mistaken for a pipeline fault."
+        tests: [not_null]
+
+  - name: mart_ml_training_serving_skew
+    description: >
+      Feature distributions in train against holdout. An honest stand-in for
+      training/serving skew: it catches definition changes and failing joins, but
+      cannot catch a serving path computing a feature differently, because there is no
+      serving path here. That needs logged serving-time features.
+    columns:
+      - name: feature_name
+        tests: [unique, not_null]
+      - name: is_skew_breach
+        tests: [not_null]

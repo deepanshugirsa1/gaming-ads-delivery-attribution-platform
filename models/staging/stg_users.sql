@@ -3,9 +3,9 @@ with source as (
 )
 
 select
-    cast(user_id as varchar)            as user_id,
+    cast(user_id as string)            as user_id,
     cast(signup_ts as timestamp)        as signup_at,
     cast(signup_ts as date)             as signup_date,
-    lower(cast(country as varchar))     as country,
-    lower(cast(signup_platform as varchar)) as signup_platform
+    lower(cast(country as string))     as country,
+    lower(cast(signup_platform as string)) as signup_platform
 from source

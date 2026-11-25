@@ -1,0 +1,32 @@
+[
+  {
+    "name": "click_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "impression_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "user_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "click_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "billable_amount_usd",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "ingest_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  }
+]

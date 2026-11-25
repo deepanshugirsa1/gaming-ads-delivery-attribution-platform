@@ -29,7 +29,7 @@ game_sessions as (
         game_session_id           as event_id,
         'game_session'            as event_type,
         user_id,
-        cast(null as varchar)     as server_id,
+        cast(null as string)     as server_id,
         started_at                as event_at,
         started_date              as event_date
     from {{ ref('int_game_sessions') }}

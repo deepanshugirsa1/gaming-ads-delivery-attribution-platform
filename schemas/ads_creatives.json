@@ -1,0 +1,27 @@
+[
+  {
+    "name": "creative_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "campaign_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "creative_format",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "duration_sec",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "created_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  }
+]

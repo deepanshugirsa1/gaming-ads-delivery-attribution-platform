@@ -1,8 +1,8 @@
-name: gaming_engagement
-version: "0.5.0"
+name: gaming_ads_platform
+version: "1.0.0"
 config-version: 2
 
-profile: gaming_engagement
+profile: gaming_ads_platform
 
 model-paths: ["models"]
 seed-paths: ["seeds"]
@@ -14,25 +14,119 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
+# ---------------------------------------------------------------------------
+# Project variables.
+# Every business rule that a stakeholder might argue about lives here rather
+# than being buried in SQL, so changing an attribution window is a one-line
+# change with a visible diff. See docs/03_attribution_spec.md.
+# ---------------------------------------------------------------------------
+vars:
+  # Attribution windows, in days, measured from touchpoint to conversion.
+  # These are the windows the reported numbers use.
+  click_window_days: 7
+  view_window_days: 1
+
+  # Candidate touchpoints are collected at the WIDEST window we ever want to report
+  # on, not at the configured one. Every narrower window is then a filter over the
+  # same candidate set, which is what makes window-sensitivity analysis a query
+  # rather than a rebuild -- and what lets a measurement argument about "should this
+  # be 7 or 28 days" be answered with numbers in minutes.
+  max_click_window_days: 28
+  max_view_window_days: 7
+
+  # How far back the incremental facts rebuild on every run.
+  # Set from the observed arrival lag, not from taste: the generator's conversions
+  # arrive up to 72 hours after the event, so a lookback shorter than three days
+  # would permanently under-report and no test on the latest partition would catch
+  # it -- the rows simply never arrive. Raise this if the measured p100 lag rises.
+  incremental_lookback_days: 3
+
+  # A conversion label is only usable for training once its attribution window
+  # has fully closed. Equals the widest window above.
+  label_maturity_days: 7
+
+  # Window pairs evaluated by mart_attribution_window_sensitivity, as
+  # [click_window_days, view_window_days]. Reported numbers use the configured
+  # windows above; these exist so the cost of that choice is visible.
+  window_sensitivity_scenarios:
+    - [1, 1]
+    - [7, 1]
+    - [14, 1]
+    - [28, 7]
+
+  # A campaign-day needs at least this many conversions on one side before a parity
+  # variance is treated as a signal. Two conversions against three is a 50% gap and
+  # means nothing; flagging it trains people to ignore the alert.
+  min_conversions_for_parity_flag: 10
+
+  # Percentage variance between first-party and third-party measurement that we
+  # treat as acceptable before a campaign-day is flagged for investigation.
+  parity_tolerance_pct: 2.0
+
+  # Freshness SLA registry, read by mart_ads_pipeline_health.
+  #
+  # Lag is measured against the latest ingest the pipeline has seen, not against
+  # wall-clock time. The dataset is static and historical, so a clock-based freshness
+  # check would report every table as permanently stale and the whole signal would be
+  # ignored. "How far behind the rest of the pipeline is this feed" is the question
+  # that still has a useful answer, and it is the one that actually catches a single
+  # feed stalling while the others keep moving.
+  source_freshness_registry:
+    - {table: stg_ads_requests,       key: request_id,     event_at: requested_at,  sla_minutes: 60}
+    - {table: stg_ads_auction_bids,   key: bid_id,         event_at: ingested_at,   sla_minutes: 60}
+    - {table: stg_ads_impressions,    key: impression_id,  event_at: impressed_at,  sla_minutes: 60}
+    - {table: stg_ads_clicks,         key: click_id,       event_at: clicked_at,    sla_minutes: 60}
+    - {table: stg_ads_conversions,    key: conversion_id,  event_at: converted_at,  sla_minutes: 4320}
+    - {table: stg_ads_mmp_postbacks,  key: postback_id,    event_at: event_at,      sla_minutes: 5760}
+
+  # Where the generated raw ad feeds live. On BigQuery this is a dataset loaded
+  # by scripts/load_bigquery.sh; on DuckDB it is a local folder of gzipped CSV.
+  ads_raw_dataset: ads_raw
+  ads_raw_path: "data/ads"
+
+  # Feature monitoring thresholds. A feature whose daily mean moves more than this
+  # against its trailing baseline, or whose null rate exceeds the floor, is flagged
+  # as an ML input problem before it reaches a model rather than after the model's
+  # metrics degrade and someone goes looking for a cause.
+  feature_drift_threshold_pct: 25
+  feature_null_rate_threshold: 0.02
+
+  # Time-based split for the ranking training set: everything on or after this
+  # date is holdout. Time-based, never random, because features are built from
+  # prior behaviour and a random split would leak the future into training.
+  holdout_start_date: "2025-02-20"
+
 models:
-  gaming_engagement:
+  gaming_ads_platform:
     staging:
       +materialized: view
       +schema: staging
+      ads:
+        +schema: staging
     intermediate:
       +materialized: view
       +schema: intermediate
+      ads:
+        +schema: intermediate
     marts:
       +materialized: table
       +schema: marts
+      ads_core:
+        +schema: ads_core
+      ads_delivery:
+        +schema: ads_delivery
+      ads_measurement:
+        +schema: ads_measurement
+      ads_ml:
+        +schema: ads_ml
 
 seeds:
-  gaming_engagement:
+  gaming_ads_platform:
     +schema: raw
     raw_users:
       +column_types:
-        user_id: varchar
+        user_id: string
     raw_servers:
       +column_types:
-        server_id: varchar
-        owner_user_id: varchar
+        server_id: string
+        owner_user_id: string

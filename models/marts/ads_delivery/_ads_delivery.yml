@@ -1,0 +1,117 @@
+version: 2
+
+models:
+  - name: agg_ad_delivery_hourly
+    description: >
+      Hourly delivery and spend: the lowest-latency surface. Carries no attributed
+      conversions on purpose -- mixing a metric final in minutes with one not final
+      for a week gives readers a table that changes under them.
+    columns:
+      - name: impressions
+        tests: [not_null, non_negative]
+      - name: clicks
+        tests: [not_null, non_negative]
+      - name: total_spend_usd
+        tests: [not_null, non_negative]
+      - name: impressed_hour
+        tests: [not_null]
+
+  - name: agg_ad_delivery_daily
+    description: >
+      Daily delivery by campaign, creative and placement. Rolled up from the hourly
+      table rather than recomputed from source, so the two surfaces cannot disagree.
+    columns:
+      - name: impressed_date
+        tests: [not_null]
+      - name: impressions
+        tests: [not_null, non_negative]
+      - name: ctr
+        tests: [non_negative]
+      - name: total_spend_usd
+        tests: [not_null, non_negative]
+
+  - name: agg_campaign_performance_daily
+    description: >
+      Campaign-day funnel, spend and attributed outcomes. Conversions are counted on
+      the touchpoint date, not the conversion date, so cost and result land on the
+      same row and CPA and ROAS mean something.
+    columns:
+      - name: activity_date
+        tests: [not_null]
+      - name: campaign_id
+        tests: [not_null]
+      - name: auction_win_rate
+        tests: [non_negative]
+      - name: attributed_conversions
+        tests: [not_null, non_negative]
+      - name: is_window_closed
+        description: >
+          False means the row is still moving: conversions keep arriving until the
+          attribution window closes. Reading a CPA off an open row reads a number
+          that is not final.
+        tests: [not_null]
+      - name: conversions_occurred_on_date
+        description: "The same conversions counted on the day they happened, for anyone who needs that view."
+        tests: [not_null, non_negative]
+
+  - name: agg_quest_funnel_daily
+    description: >
+      The rewarded-quest funnel by day, campaign, format and placement. Every rate
+      divides by a denominator from the same format, because a reserve buy paying
+      out on full completion and a video quest paying out at fifteen seconds have
+      completion rates that are not comparable numbers.
+    columns:
+      - name: impressed_date
+        tests: [not_null]
+      - name: quest_format
+        tests: [not_null]
+      - name: impressions
+        tests: [not_null, non_negative]
+      - name: rewards_granted
+        tests: [not_null, non_negative]
+      - name: reward_rate
+        tests: [non_negative]
+      - name: cost_per_reward_usd
+        description: "The closest thing to a unit price on a rewarded format."
+        tests: [non_negative]
+      - name: abandoned_after_q75
+        description: "Where a reserve buy loses its payout."
+        tests: [not_null]
+
+  - name: mart_budget_pacing_daily
+    description: >
+      Daily spend against daily budget per campaign. Reservation campaigns are
+      flagged rather than excluded: they are not paced against a budget at all, so
+      averaging them in would understate how hard the auction campaigns are
+      spending. Thresholds are wide on purpose — flagging every campaign that misses
+      exactly 100% produces an alert nobody reads.
+    columns:
+      - name: activity_date
+        tests: [not_null]
+      - name: campaign_id
+        tests: [not_null]
+      - name: budget_utilization
+        tests: [non_negative]
+      - name: is_reservation
+        tests: [not_null]
+      - name: is_overspending
+        tests: [not_null]
+      - name: is_underdelivering
+        tests: [not_null]
+
+  - name: mart_auction_landscape_daily
+    description: >
+      The shape of the auction each day by advertiser tier. The question that decides
+      whether a newly opened self-serve marketplace is healthy is whether small
+      advertisers can win anything; reserved inventory is reported separately because
+      it takes its slot ahead of the auction rather than clearing it.
+    columns:
+      - name: requested_date
+        tests: [not_null]
+      - name: bids_submitted
+        tests: [not_null, non_negative]
+      - name: win_rate
+        tests: [non_negative]
+      - name: avg_competing_bids
+        description: "Rising crowding with a falling win rate is a tier being squeezed out."
+        tests: [non_negative]

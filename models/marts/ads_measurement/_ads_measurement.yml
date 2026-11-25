@@ -1,0 +1,86 @@
+version: 2
+
+models:
+  - name: mart_measurement_parity
+    description: >
+      First-party attribution against third-party claims per campaign-day. Both sides
+      counted on the conversion date, scope matched to mobile install and purchase,
+      and unidentified postbacks held out as a known unknown rather than folded into
+      either side.
+    columns:
+      - name: event_date
+        tests: [not_null]
+      - name: first_party_conversions
+        tests: [not_null, non_negative]
+      - name: third_party_conversions
+        tests: [not_null, non_negative]
+      - name: match_rate
+        description: "Share of our attributed conversions the partner also matched."
+      - name: has_sufficient_volume
+        description: "Below the volume floor a variance percentage is noise, so it is not flagged."
+        tests: [not_null]
+      - name: is_parity_breach
+        description: "Material variance resting on enough volume to mean something."
+        tests: [not_null]
+
+  - name: mart_mmp_surface_health
+    description: >
+      Per partner per day: retransmission rate, identifier loss, delivery lag,
+      internally inconsistent claims. When parity breaches, this says whether to
+      investigate our attribution or email the vendor.
+    columns:
+      - name: mmp_name
+        tests: [not_null]
+      - name: retransmission_rate
+        tests: [non_negative]
+      - name: unidentified_user_rate
+        tests: [non_negative]
+      - name: p95_receive_lag_minutes
+        tests: [non_negative]
+
+  - name: mart_attribution_window_sensitivity
+    description: >
+      How many conversions each candidate window would credit, evaluated over one
+      candidate set with the production ranking rule. Exists so "7 days or 28" is
+      answered with a number instead of a preference.
+    columns:
+      - name: scenario_click_window_days
+        tests: [not_null, non_negative]
+      - name: attributed_conversions
+        tests: [not_null, non_negative]
+      - name: attribution_coverage
+        description: "Share of all conversions this window credits; the rest is organic plus out-of-window."
+        tests: [non_negative]
+      - name: is_configured_window
+        description: "Marks the row matching the window we actually publish."
+        tests: [not_null]
+
+  - name: mart_multi_touch_comparison
+    description: >
+      Last-touch against linear credit per campaign, quantifying how much the
+      reporting choice flatters closers over introducers.
+    columns:
+      - name: campaign_id
+        tests: [unique, not_null]
+      - name: last_touch_conversions
+        tests: [not_null, non_negative]
+      - name: linear_conversions
+        tests: [not_null, non_negative]
+      - name: is_undercredited_by_last_touch
+        description: "Appears in conversion paths without closing them; the campaign someone is about to cut."
+        tests: [not_null]
+
+  - name: mart_ads_pipeline_health
+    description: >
+      Per-feed volume, duplication and arrival lag against its SLA. Lag is measured
+      against the latest ingest in the pipeline, not the clock, so the signal still
+      works on a historical replay.
+    columns:
+      - name: feed_name
+        tests: [unique, not_null]
+      - name: rows_received
+        tests: [not_null, non_negative]
+      - name: duplicate_rate
+        tests: [non_negative]
+      - name: is_within_sla
+        tests: [not_null]

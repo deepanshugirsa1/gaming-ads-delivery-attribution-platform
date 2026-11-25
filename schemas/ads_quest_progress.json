@@ -1,0 +1,67 @@
+[
+  {
+    "name": "progress_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "impression_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "user_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "campaign_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "creative_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "quest_format",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "milestone",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "seconds_viewed",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "playtime_minutes",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "progress_pct",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "orbs_granted",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "occurred_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "ingest_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  }
+]

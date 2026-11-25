@@ -4,9 +4,9 @@ with source as (
 
 typed as (
     select
-        cast(voice_session_id as varchar) as voice_session_id,
-        cast(user_id as varchar)          as user_id,
-        cast(server_id as varchar)        as server_id,
+        cast(voice_session_id as string) as voice_session_id,
+        cast(user_id as string)          as user_id,
+        cast(server_id as string)        as server_id,
         cast(started_ts as timestamp)     as started_at,
         cast(ended_ts as timestamp)       as ended_at,
         cast(started_ts as date)          as started_date

@@ -1,0 +1,259 @@
+version: 2
+
+models:
+  - name: stg_ads_advertisers
+    description: "One row per advertiser, typed and standardized."
+    columns:
+      - name: advertiser_id
+        description: "Unique advertiser identifier."
+        tests: [unique, not_null]
+      - name: vertical
+        description: "Advertiser industry, lowercased."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["game_studio", "mobile_game", "hardware", "energy_drink",
+                       "streaming", "apparel", "fintech"]
+
+  - name: stg_ads_campaigns
+    description: >
+      One row per campaign. Targeting clauses are left as the source's pipe-delimited
+      text; they are interpreted once in dim_campaigns.
+    columns:
+      - name: campaign_id
+        tests: [unique, not_null]
+      - name: advertiser_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_ads_advertisers')
+              field: advertiser_id
+      - name: objective
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["awareness", "traffic", "installs", "conversions"]
+      - name: bid_strategy
+        description: "cpm bills on delivery; cpc bills on the click."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["cpm", "cpc"]
+      - name: bid_amount_usd
+        tests: [not_null, non_negative]
+      - name: daily_budget_usd
+        tests: [not_null, non_negative]
+      - name: starts_at
+        tests: [not_null]
+
+  - name: stg_ads_creatives
+    description: "One row per creative, belonging to exactly one campaign."
+    columns:
+      - name: creative_id
+        tests: [unique, not_null]
+      - name: campaign_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_ads_campaigns')
+              field: campaign_id
+      - name: creative_format
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["video_preroll", "display_banner", "sponsored_quest"]
+      - name: duration_sec
+        tests: [non_negative]
+
+  - name: stg_ads_requests
+    description: >
+      One row per ad request: an opportunity to serve, whether or not anything did.
+      The denominator for fill rate and every inventory question.
+    columns:
+      - name: request_id
+        tests: [unique, not_null]
+      - name: user_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_users')
+              field: user_id
+      - name: server_id
+        tests: [not_null]
+      - name: placement
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["feed", "server_banner", "voice_lobby", "quest_hub"]
+      - name: device_platform
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["desktop", "mobile", "web"]
+      - name: eligible_campaign_count
+        description: "Campaigns whose targeting matched this request at auction time."
+        tests: [not_null, non_negative]
+      - name: requested_at
+        tests: [not_null]
+
+  - name: stg_ads_auction_bids
+    description: >
+      One row per bid. The largest feed in the project and the grain the ranking
+      features are built at, because ranking is a decision about candidates.
+    columns:
+      - name: bid_id
+        tests: [unique, not_null]
+      - name: request_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_ads_requests')
+              field: request_id
+      - name: campaign_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_ads_campaigns')
+              field: campaign_id
+      - name: creative_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_ads_creatives')
+              field: creative_id
+      - name: bid_cpm_usd
+        tests: [not_null, non_negative]
+      - name: predicted_ctr
+        description: "The incumbent ranker's own score at auction time."
+        tests: [not_null, non_negative]
+      - name: is_winner
+        tests: [not_null]
+
+  - name: stg_ads_impressions
+    description: >
+      Impressions as logged, duplicate retransmissions included. Deduplication is
+      deliberately downstream so the raw duplicate rate stays measurable. No
+      uniqueness test on impression_id here -- duplicates are expected at this layer
+      and asserted absent in int_ads_impressions_deduped.
+    columns:
+      - name: impression_id
+        tests: [not_null]
+      - name: request_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_ads_requests')
+              field: request_id
+      - name: campaign_id
+        tests: [not_null]
+      - name: billable_amount_usd
+        tests: [not_null, non_negative]
+      - name: view_duration_ms
+        tests: [non_negative]
+      - name: impressed_at
+        tests: [not_null]
+
+  - name: stg_ads_clicks
+    description: >
+      Clicks as logged, including those whose impression was never logged. Orphans
+      are resolved and flagged in int_ads_clicks_validated rather than joined away.
+    columns:
+      - name: click_id
+        tests: [unique, not_null]
+      - name: impression_id
+        description: "May reference an impression that does not exist; see is_orphan downstream."
+        tests: [not_null]
+      - name: clicked_at
+        tests: [not_null]
+      - name: billable_amount_usd
+        tests: [not_null, non_negative]
+
+  - name: stg_ads_conversions
+    description: "First-party conversions, with the lag between event and arrival."
+    columns:
+      - name: conversion_id
+        tests: [unique, not_null]
+      - name: user_id
+        tests: [not_null]
+      - name: advertiser_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_ads_advertisers')
+              field: advertiser_id
+      - name: conversion_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["install", "purchase", "signup", "add_to_cart"]
+      - name: conversion_value_usd
+        tests: [not_null, non_negative]
+      - name: device_platform
+        description: "Carried so third-party parity can compare matching scope."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["desktop", "mobile", "web"]
+      - name: ingest_lag_minutes
+        description: "Minutes between the conversion and its arrival; sets the incremental lookback."
+        tests: [not_null, non_negative]
+
+  - name: stg_ads_mmp_postbacks
+    description: >
+      Third-party measurement postbacks as received. Every asserted field is prefixed
+      `claimed_`: this table is a partner's opinion, not a fact about our delivery.
+      Retransmissions are expected, so postback_id is not unique here.
+    columns:
+      - name: postback_id
+        tests: [not_null]
+      - name: mmp_name
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["mmp_alpha", "mmp_beta", "mmp_gamma"]
+      - name: event_name
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["install", "purchase"]
+      - name: claimed_attribution_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["click_through", "view_through"]
+      - name: receive_lag_minutes
+        tests: [not_null, non_negative]
+      - name: claimed_value_usd
+        tests: [non_negative]
+
+  - name: stg_ads_quest_progress
+    description: >
+      Milestone events inside a rewarded quest: view or play starting, each video
+      quartile reached, the view completing, a playtime threshold being met, and the
+      reward being granted. Modelled as events rather than columns on the impression
+      because the question a rewarded format has to answer is where users stop.
+    columns:
+      - name: progress_id
+        tests: [unique, not_null]
+      - name: impression_id
+        tests: [not_null]
+      - name: quest_format
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["video_quest", "video_quest_reserve", "play_quest", "arena_quest"]
+      - name: milestone
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["view_start", "play_start", "quartile_25", "quartile_50",
+                       "quartile_75", "view_complete", "playtime_threshold", "reward_granted"]
+      - name: seconds_viewed
+        tests: [not_null, non_negative]
+      - name: playtime_minutes
+        tests: [not_null, non_negative]
+      - name: progress_pct
+        description: "Derived from the time actually recorded, never from a latent draw."
+        tests: [not_null, non_negative]
+      - name: orbs_granted
+        tests: [not_null, non_negative]

@@ -1,14 +1,18 @@
-# BigQuery profile — copy to ~/.dbt/profiles.yml and fill in your values.
-# The same models run unchanged on BigQuery; only this profile differs.
-gaming_engagement:
+# Alternative BigQuery profile using a service-account key file, for a CI runner or
+# any environment without an interactive gcloud login. Copy to ~/.dbt/profiles.yml.
+#
+# The committed profiles.yml uses oauth and environment variables instead, which is
+# preferable for local work: there is no key file to leak and nothing to rotate.
+gaming_ads_platform:
   target: bigquery
   outputs:
     bigquery:
       type: bigquery
       method: service-account
       project: your-gcp-project-id
-      dataset: gaming_engagement
+      dataset: gaming_ads_platform
       keyfile: /path/to/service-account.json
       location: US
-      threads: 4
+      threads: 8
       priority: interactive
+      maximum_bytes_billed: 100000000000

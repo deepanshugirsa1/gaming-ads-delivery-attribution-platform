@@ -3,11 +3,11 @@ with source as (
 )
 
 select
-    cast(message_id as varchar)   as message_id,
-    cast(user_id as varchar)      as user_id,
-    cast(server_id as varchar)    as server_id,
-    cast(channel_id as varchar)   as channel_id,
+    cast(message_id as string)   as message_id,
+    cast(user_id as string)      as user_id,
+    cast(server_id as string)    as server_id,
+    cast(channel_id as string)   as channel_id,
     cast(sent_ts as timestamp)    as sent_at,
     cast(sent_ts as date)         as sent_date,
-    cast(char_count as integer)   as char_count
+    cast(char_count as int)   as char_count
 from source

@@ -1,0 +1,74 @@
+name: build
+
+# Runs the whole thing on every push: lint, generate, validate the generated data,
+# build every model, run every test, then gate on pipeline health. The point is that
+# nothing in this repository can be claimed to work unless this job is green.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Static checks first: they cost seconds and catch the portability mistakes that
+      # would otherwise only surface on whichever warehouse ran second.
+      - name: Lint project (portability, compilation, graph, docs)
+        run: python scripts/lint_project.py
+
+      # The monitoring logic is verified against fixtures, with no warehouse needed, so
+      # a thresholds edit that disables a gate fails here rather than passing silently.
+      - name: Self-test the quality gate
+        run: python scripts/quality_gate.py --self-test
+
+      - name: Self-test the anomaly detector
+        run: python scripts/detect_anomalies.py --self-test
+
+      # Reduced scale keeps CI minutes sane. The planted anomaly rates are unchanged,
+      # so every failure mode is still exercised -- there is just less of each.
+      - name: Generate ad event feeds
+        run: python generate_ads_events.py --scale 0.5 --seed 42
+
+      - name: Validate generated data
+        run: python scripts/validate_generated_data.py
+
+      - name: dbt build (DuckDB)
+        run: dbt build --profiles-dir . --target duckdb
+
+      - name: Check attribution against ground truth
+        run: python scripts/validate_attribution.py
+
+      - name: Quality gate
+        run: python scripts/quality_gate.py
+
+      - name: Detect delivery anomalies
+        run: python scripts/detect_anomalies.py
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            lint_report.json
+            validation_report.json
+            quality_report.json
+            anomaly_report.json
+            attribution_validation.json
+            target/run_results.json
+          if-no-files-found: warn
+          retention-days: 14

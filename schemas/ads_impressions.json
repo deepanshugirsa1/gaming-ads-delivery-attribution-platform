@@ -1,0 +1,62 @@
+[
+  {
+    "name": "impression_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "request_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "campaign_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "creative_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "user_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "server_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "placement",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "impression_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "billable_amount_usd",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "is_viewable",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "view_duration_ms",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "ingest_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  }
+]

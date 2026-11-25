@@ -1,0 +1,8 @@
+# Optional: the Dagster orchestration layer in orchestration/.
+# Kept separate from requirements.txt because the dbt project, its tests and every
+# check in scripts/ run without it, and CI should not install what it does not use.
+#
+# NOT YET VERIFIED -- see the note at the top of orchestration/definitions.py.
+dagster==1.8.13
+dagster-dbt==0.24.13
+dagster-webserver==1.8.13

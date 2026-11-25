@@ -1,0 +1,57 @@
+[
+  {
+    "name": "postback_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "mmp_name",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "feed_contract",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "advertiser_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "claimed_campaign_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "claimed_user_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "event_name",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "event_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "received_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "claimed_attribution_type",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "claimed_value_usd",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  }
+]

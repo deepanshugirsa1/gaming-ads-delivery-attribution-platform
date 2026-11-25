@@ -1,0 +1,106 @@
+version: 2
+
+models:
+  - name: int_ads_impressions_deduped
+    description: >
+      One row per impression_id, keeping the first delivery. The uniqueness test here
+      is the assertion that deduplication works -- it is the whole purpose of the model.
+    columns:
+      - name: impression_id
+        tests: [unique, not_null]
+      - name: request_id
+        tests: [not_null]
+      - name: billable_amount_usd
+        tests: [not_null, non_negative]
+
+  - name: int_ads_clicks_validated
+    description: >
+      Every click, resolved to its impression where possible and flagged as an orphan
+      where not. Orphans are retained so the rate stays reportable.
+    columns:
+      - name: click_id
+        tests: [unique, not_null]
+      - name: is_orphan
+        description: "True when the referenced impression was never logged."
+        tests: [not_null]
+
+  - name: int_ads_mmp_postbacks_deduped
+    description: "One row per postback_id, keeping the first receipt."
+    columns:
+      - name: postback_id
+        tests: [unique, not_null]
+
+  - name: int_ads_user_campaign_exposure_daily
+    description: "Impressions served to each user by each campaign per day."
+    columns:
+      - name: impressions_served
+        tests: [not_null, non_negative]
+
+  - name: int_ads_user_campaign_exposure_trailing_7d
+    description: >
+      Prior-7-day exposure per user, campaign and auction day. Spined on bids so every
+      bid gets a value, and built from strictly earlier days so it cannot leak.
+    columns:
+      - name: prior_7d_impressions
+        tests: [not_null, non_negative]
+      - name: as_of_date
+        tests: [not_null]
+
+  - name: int_ads_campaign_performance_asof
+    description: >
+      Campaign delivery history as of each auction day, strictly-prior only. Exposes no
+      same-day column, so it is structurally incapable of leaking the present.
+    columns:
+      - name: as_of_date
+        tests: [not_null]
+      - name: prior_7d_impressions
+        tests: [not_null, non_negative]
+      - name: prior_7d_ctr
+        description: "Null, not zero, for a campaign with no measured history."
+
+  - name: int_ads_conversion_candidates
+    description: >
+      Every (conversion, touchpoint) pair inside the widest window the project reports
+      on. Narrower windows are filters over this table, which is what makes window
+      sensitivity a query rather than a reprocess.
+    columns:
+      - name: conversion_id
+        tests: [not_null]
+      - name: touchpoint_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["click", "view"]
+      - name: days_to_conversion
+        description: "Fractional days from touchpoint to conversion; never negative."
+        tests: [not_null, non_negative]
+
+  - name: int_ads_attribution_ranked
+    description: >
+      In-window candidates ranked so exactly one wins each conversion: click over view,
+      then most recent, then a deterministic tie-break on id.
+    columns:
+      - name: conversion_id
+        tests: [not_null]
+      - name: touchpoint_rank
+        tests: [not_null, non_negative]
+      - name: linear_credit
+        description: "Equal multi-touch share; sums to exactly 1 per conversion."
+        tests: [not_null, non_negative]
+
+  - name: int_ads_quest_outcomes
+    description: >
+      One row per impression, collapsing its milestone stream into an outcome by
+      conditional aggregation, so the funnel and the outcome cannot drift apart.
+      Deliberately exposes no single completion rate: completion means a different
+      thing per format, and one average across them would divide by incomparable
+      denominators.
+    columns:
+      - name: impression_id
+        tests: [unique, not_null]
+      - name: was_rewarded
+        tests: [not_null]
+      - name: seconds_viewed
+        tests: [not_null, non_negative]
+      - name: progress_pct
+        tests: [not_null, non_negative]

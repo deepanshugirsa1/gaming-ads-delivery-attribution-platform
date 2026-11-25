@@ -1,0 +1,92 @@
+[
+  {
+    "name": "campaign_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "advertiser_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "campaign_name",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "objective",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "quest_format",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "buying_model",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "reward_orbs",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "completion_threshold_seconds",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "required_playtime_minutes",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "bid_strategy",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "bid_amount_usd",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "daily_budget_usd",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "start_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "end_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "target_countries",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "target_platforms",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "target_server_categories",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "created_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  }
+]

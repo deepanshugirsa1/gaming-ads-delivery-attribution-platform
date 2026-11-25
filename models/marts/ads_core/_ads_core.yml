@@ -1,0 +1,227 @@
+version: 2
+
+models:
+  - name: dim_advertisers
+    description: "One row per advertiser with campaign and conversion rollups."
+    columns:
+      - name: advertiser_id
+        tests: [unique, not_null]
+      - name: campaign_count
+        tests: [not_null, non_negative]
+      - name: lifetime_conversions
+        tests: [not_null, non_negative]
+
+  - name: dim_campaigns
+    description: >
+      One row per campaign with targeting clauses interpreted exactly once. Item
+      counts are null for an unrestricted clause, because 'ALL' is not a list of one.
+    columns:
+      - name: campaign_id
+        tests: [unique, not_null]
+      - name: advertiser_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_advertisers')
+              field: advertiser_id
+      - name: objective
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["awareness", "traffic", "installs", "conversions"]
+      - name: bid_strategy
+        tests:
+          - not_null
+          - accepted_values: {values: ["cpm", "cpc"]}
+      - name: is_unrestricted_targeting
+        description: "Unrestricted on country, platform and server category at once."
+        tests: [not_null]
+      - name: target_country_count
+        tests: [non_negative]
+      - name: creative_count
+        tests: [not_null, non_negative]
+
+  - name: dim_creatives
+    description: "One row per creative with lifetime delivery and CTR."
+    columns:
+      - name: creative_id
+        tests: [unique, not_null]
+      - name: campaign_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_campaigns')
+              field: campaign_id
+      - name: lifetime_ctr
+        description: "Null when the creative never served; zero would be a claim we cannot make."
+
+  - name: dim_ad_placements
+    description: "One row per placement with the funnel from request to click."
+    columns:
+      - name: placement
+        tests: [unique, not_null]
+      - name: ad_requests
+        tests: [not_null, non_negative]
+      - name: fill_rate
+        tests: [not_null]
+
+  - name: fct_ad_requests
+    description: >
+      One row per ad request, filled or not. Incremental on ingest time with a
+      lookback, so a late arrival still lands.
+    columns:
+      - name: request_id
+        tests: [unique, not_null]
+      - name: user_id
+        tests: [not_null]
+      - name: is_filled
+        description: "An impression was delivered for this request."
+        tests: [not_null]
+      - name: is_render_failure
+        description: >
+          Auction had bids but nothing rendered. Kept distinct from 'no eligible
+          campaign' because the two have different owners -- client bug versus demand gap.
+        tests: [not_null]
+      - name: bid_count
+        tests: [not_null, non_negative]
+
+  - name: fct_ad_auction_bids
+    description: "One row per bid, with request context and whether it served."
+    columns:
+      - name: bid_id
+        tests: [unique, not_null]
+      - name: request_id
+        tests: [not_null]
+      - name: campaign_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_campaigns')
+              field: campaign_id
+      - name: is_won_not_served
+        tests: [not_null]
+      - name: auction_bid_count
+        tests: [not_null, non_negative]
+
+  - name: fct_ad_impressions
+    description: >
+      Canonical impression table: deduplicated, enriched, and carrying total spend
+      from both billing paths. Anything reporting delivery reads this, not staging.
+    columns:
+      - name: impression_id
+        tests: [unique, not_null]
+      - name: campaign_id
+        tests: [not_null]
+      - name: impression_spend_usd
+        tests: [not_null, non_negative]
+      - name: click_spend_usd
+        description: "Non-zero only for CPC campaigns, and only when clicked."
+        tests: [not_null, non_negative]
+      - name: total_spend_usd
+        description: "Impression plus click billing. Summing only one understates every CPC campaign."
+        tests: [not_null, non_negative]
+      - name: is_clicked
+        tests: [not_null]
+      - name: is_viewable
+        tests: [not_null]
+
+  - name: fct_ad_clicks
+    description: "One row per click, orphans included and flagged."
+    columns:
+      - name: click_id
+        tests: [unique, not_null]
+      - name: is_orphan
+        tests: [not_null]
+      - name: click_spend_usd
+        tests: [not_null, non_negative]
+
+  - name: fct_conversions
+    description: >
+      One row per first-party conversion, before attribution. Separate from
+      attribution on purpose: how many conversions happened is a fact, which ad earns
+      the credit is a modelling choice.
+    columns:
+      - name: conversion_id
+        tests: [unique, not_null]
+      - name: advertiser_id
+        tests: [not_null]
+      - name: conversion_value_usd
+        tests: [not_null, non_negative]
+      - name: exceeded_incremental_lookback
+        description: "Arrived later than the lookback would have caught; tells us when to widen it."
+        tests: [not_null]
+
+  - name: fct_attributed_conversions
+    description: >
+      One row per conversion, attributed or not, with an explicit reason. Every
+      conversion appears exactly once -- an inner join here would delete organic
+      demand and make ads look 100% effective.
+    columns:
+      - name: conversion_id
+        tests: [unique, not_null]
+      - name: is_attributed
+        tests: [not_null]
+      - name: attribution_type
+        tests:
+          - accepted_values: {values: ["click", "view"]}
+      - name: attribution_outcome
+        description: >
+          'no_touchpoint' is organic demand; 'touchpoint_outside_window' did follow an
+          ad, just not soon enough to count. The distinction is the whole argument for
+          or against a wider window.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["attributed", "touchpoint_outside_window", "no_touchpoint"]
+      - name: days_from_touchpoint_to_conversion
+        tests: [non_negative]
+
+  - name: fct_mmp_postbacks
+    description: >
+      Deduplicated third-party postbacks with every partner assertion checked against
+      what we know. Matching tolerates a minute of clock skew, because an exact-match
+      join turns ordinary skew into a fake measurement discrepancy.
+    columns:
+      - name: postback_id
+        tests: [unique, not_null]
+      - name: claimed_campaign_exists
+        tests: [not_null]
+      - name: has_advertiser_mismatch
+        description: "Partner's claimed campaign belongs to a different advertiser; never trust for billing."
+        tests: [not_null]
+      - name: has_first_party_match
+        tests: [not_null]
+      - name: is_third_party_only
+        description: "Partner reported a conversion we have no record of; explains parity gaps."
+        tests: [not_null]
+
+  - name: fct_quest_completions
+    description: >
+      One row per impression with how far into the rewarded quest the user got and
+      whether the reward was earned. The canonical table for rewarded-format
+      performance: delivery says how many ads were shown, this says how many were
+      finished, which is what a rewarded product is actually selling. Impressions
+      with no milestone stream are kept with did_start false, so completion rates
+      are not inflated by a shrinking denominator.
+    columns:
+      - name: impression_id
+        tests: [unique, not_null]
+      - name: quest_format
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["video_quest", "video_quest_reserve", "play_quest", "arena_quest"]
+      - name: buying_model
+        tests:
+          - not_null
+          - accepted_values: {values: ["auction", "reservation"]}
+      - name: was_rewarded
+        tests: [not_null]
+      - name: did_start
+        tests: [not_null]
+      - name: seconds_viewed
+        tests: [not_null, non_negative]
+      - name: orbs_granted
+        tests: [not_null, non_negative]
+      - name: seconds_to_reward
+        tests: [non_negative]

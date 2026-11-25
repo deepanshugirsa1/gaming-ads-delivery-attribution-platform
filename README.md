@@ -192,31 +192,32 @@ API but has not been executed. It is excluded from CI and from every claim made 
 until `dagster dev` has run it.
 
 <!-- STATS:START -->
-**Last `dbt build`** — target `duckdb`, dbt 1.8.7, 2026-11-25T01:15:52.429394Z
+**Last `dbt build`** — target `duckdb`, dbt 1.8.7, 2026-11-25T02:19:50.667814Z
 
-- `PASS=480` of 480 nodes, `FAIL=0`, `WARN=0`, `SKIP=0`
-- 62 models, 412 tests, 6 seeds, 308s wall clock
-- lint: 62 models, 18 singular tests, DAG depth 9, 0 problems
+- `PASS=541` of 541 nodes, `FAIL=0`, `WARN=0`, `SKIP=0`
+- 70 models, 465 tests, 6 seeds, 657s wall clock
+- lint: 70 models, 22 singular tests, DAG depth 11, 0 problems
 
-**Generated feeds** — scale 4.0, seed 42, 11,085,709 rows total
+**Generated feeds** — scale 4.0, seed 42, 10,822,555 rows total
 
 | feed | rows |
 |---|---:|
 | `ads_advertisers` | 24 |
 | `ads_campaigns` | 60 |
-| `ads_creatives` | 182 |
-| `ads_requests` | 1,205,931 |
-| `ads_auction_bids` | 5,794,351 |
-| `ads_impressions` | 1,107,571 |
-| `ads_clicks` | 20,787 |
-| `ads_conversions` | 4,405 |
-| `ads_quest_progress` | 2,951,244 |
-| `ads_mmp_postbacks` | 1,154 |
+| `ads_creatives` | 187 |
+| `ads_device_identities` | 3,960 |
+| `ads_requests` | 1,205,908 |
+| `ads_auction_bids` | 6,256,564 |
+| `ads_impressions` | 1,099,992 |
+| `ads_clicks` | 15,241 |
+| `ads_conversions` | 3,098 |
+| `ads_quest_progress` | 2,236,821 |
+| `ads_mmp_postbacks` | 700 |
 
-- generated-data checks: 34 run, 0 failed
-- quality gate: **PASS** (0 errors, 4 warnings)
+- generated-data checks: 43 run, 0 failed
+- quality gate: **PASS** (0 errors, 3 warnings)
 
-<sub>Block written by `scripts/update_readme_stats.py` at 2026-11-25 01:16 UTC. No number here is typed by hand.</sub>
+<sub>Block written by `scripts/update_readme_stats.py` at 2026-11-25 02:20 UTC. No number here is typed by hand.</sub>
 <!-- STATS:END -->
 
 ---

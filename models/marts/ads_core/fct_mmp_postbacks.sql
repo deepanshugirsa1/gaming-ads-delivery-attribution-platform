@@ -10,8 +10,23 @@
 -- Where several first-party conversions fall inside the tolerance, the nearest in
 -- time wins, deterministically, so the match is reproducible.
 
-with postbacks as (
-    select * from {{ ref('int_ads_mmp_postbacks_deduped') }}
+with resolved_devices as (
+    select device_id, resolved_user_id, resolution_method
+    from {{ ref('int_identity_resolved_devices') }}
+),
+
+postbacks as (
+    -- A partner that cannot pass a user identifier can still pass a device. Resolving
+    -- it recovers postbacks that would otherwise sit in the unattributable bucket and
+    -- show up as a parity gap we could not explain.
+    select
+        p.*,
+        coalesce(p.claimed_user_id, rd.resolved_user_id) as resolved_claimed_user_id,
+        (p.claimed_user_id is null and rd.resolved_user_id is not null)
+            as is_identity_recovered,
+        rd.resolution_method as device_resolution_method
+    from {{ ref('int_ads_mmp_postbacks_deduped') }} p
+    left join resolved_devices rd on p.claimed_device_id = rd.device_id
 ),
 
 conversions as (
@@ -43,7 +58,7 @@ matched as (
         ) as match_rank
     from postbacks p
     join conversions cv
-        on  p.claimed_user_id = cv.user_id
+        on  p.resolved_claimed_user_id = cv.user_id
         and p.advertiser_id = cv.advertiser_id
         and p.event_name = cv.conversion_type
         and abs({{ dbt.datediff('p.event_at', 'cv.converted_at', 'second') }}) <= 60
@@ -62,6 +77,10 @@ select
     p.advertiser_id,
     p.claimed_campaign_id,
     p.claimed_user_id,
+    p.claimed_device_id,
+    p.resolved_claimed_user_id,
+    p.is_identity_recovered,
+    p.device_resolution_method,
     p.event_name,
     p.event_at,
     p.event_date,
@@ -69,7 +88,7 @@ select
     p.receive_lag_minutes,
     p.claimed_attribution_type,
     p.claimed_value_usd,
-    p.is_unidentified_user,
+    p.resolved_claimed_user_id is null as is_unidentified_user,
 
     c.campaign_id is not null                     as claimed_campaign_exists,
     c.campaign_advertiser_id,

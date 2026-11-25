@@ -36,6 +36,8 @@ warehouses produce identical types from identical files.
 - **`stg_ads_clicks`** — clicks as logged, including ones whose impression is unknown.
 - **`stg_ads_conversions`** — first-party conversions, with arrival lag computed.
 - **`stg_ads_quest_progress`** — milestone events inside a quest.
+- **`stg_ads_device_identities`** — one row per device with only observable signals.
+  No user column: ownership is the question, not an input.
 - **`stg_ads_mmp_postbacks`** — third-party claims. Every asserted field is prefixed
   `claimed_`, because this table is a partner's opinion, not a fact about our delivery.
 
@@ -48,7 +50,18 @@ warehouses produce identical types from identical files.
 - **`int_user_engagement_trailing_7d`** — prior-7-day engagement per user per day. The
   bridge between the engagement and ads halves; strictly prior days only.
 
-## Intermediate — ads (9)
+## Intermediate — identity (3)
+
+- **`int_identity_deterministic_links`** — devices whose owner is observed, because the
+  client was signed in. The spine; everything probabilistic is anchored to it.
+- **`int_identity_probabilistic_candidates`** — candidate owners for unlinked devices
+  from shared network prefix, scored from named components and capped below 1.0.
+  Ambiguous networks are flagged, never guessed.
+- **`int_identity_resolved_devices`** — one row per device with owner, method and
+  confidence. Accepts a probabilistic match only when unambiguous and above the floor;
+  records the reason when it does not.
+
+## Intermediate — ads (10)
 
 - **`int_ads_impressions_deduped`** — one row per `impression_id`, keeping the first
   delivery. Deduplication happens here, not in staging, so the raw duplicate rate stays
@@ -69,6 +82,9 @@ warehouses produce identical types from identical files.
   it cannot leak.
 - **`int_ads_conversion_candidates`** — every (conversion, touchpoint) pair inside the
   *widest* window, 28 days. Narrower windows are filters over this.
+- **`int_ads_conversions_resolved`** — identity applied exactly once: observed
+  identifier where there is one, graph resolution where there is not, so conversion
+  counts and attributed counts cannot resolve identity differently.
 - **`int_ads_attribution_ranked`** — in-window candidates ranked so exactly one wins:
   click over view, then most recent, then a deterministic tie-break.
 
@@ -133,6 +149,16 @@ warehouses produce identical types from identical files.
 - **`mart_multi_touch_comparison`** — last-touch against linear credit per campaign.
 - **`mart_ads_pipeline_health`** — per feed: volume, duplicates, lag against SLA.
 
+## Marts — identity (3)
+
+- **`dim_identity_graph`** — one row per device: owner, method, confidence. Unresolved
+  devices kept with the reason. `devices_for_user` shows the graph from the other side,
+  where an over-matching rule appears before it reaches attribution.
+- **`mart_identity_resolution_coverage`** — coverage by platform and method, with the
+  three unresolved reasons kept apart because they have different owners.
+- **`mart_identity_attribution_impact`** — what the graph is worth in conversions, with
+  the no-graph counterfactual labelled as an upper bound.
+
 ## Marts — ML (5)
 
 - **`fct_ranking_features`** — features at bid grain; every column computable at request
@@ -144,7 +170,7 @@ warehouses produce identical types from identical files.
 
 ---
 
-## The ten questions to be able to answer cold
+## The eleven questions to be able to answer cold
 
 1. **Why is the feature table at bid grain?** Training only on served impressions means
    learning only from ads the current ranker already liked.
@@ -165,6 +191,10 @@ warehouses produce identical types from identical files.
 9. **Why median and MAD for anomalies, and why three estimators?** The outlier is in the
    baseline; MAD alone was too noisy on a 30-point window and gave 0.6% false alarms,
    the max of three gave 0.03%.
-10. **What can't this tell you?** Attribution cannot separate influence from
+10. **Why does the identity graph refuse to guess?** Misattributing is worse than not
+    attributing: an unattributed conversion understates one campaign, a misattributed
+    one also overstates another and poisons the ranker's labels. Hence the confidence
+    floor, the ambiguous-network rule, and a check that fails on precision not coverage.
+11. **What can't this tell you?** Attribution cannot separate influence from
     coincidence. `validate_attribution.py` reports how often organic conversions get
     credited to ads, and only an experiment can resolve it.

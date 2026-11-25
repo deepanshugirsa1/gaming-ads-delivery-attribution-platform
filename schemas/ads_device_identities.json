@@ -1,0 +1,47 @@
+[
+  {
+    "name": "device_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "platform",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "signed_in_account_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "device_ad_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "ip_prefix",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "ua_fingerprint",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "first_seen_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "last_seen_ts",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "observed_sessions",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  }
+]

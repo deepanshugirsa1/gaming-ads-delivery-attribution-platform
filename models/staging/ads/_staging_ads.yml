@@ -173,7 +173,12 @@ models:
     columns:
       - name: conversion_id
         tests: [unique, not_null]
-      - name: user_id
+      - name: observed_user_id
+        description: >
+          Nullable by design. A conversion can arrive with no user identifier at all;
+          replacing that with a placeholder would hide the exact population the
+          identity graph exists to recover. Resolved in int_ads_conversions_resolved.
+      - name: conversion_device_id
         tests: [not_null]
       - name: advertiser_id
         tests:
@@ -257,3 +262,25 @@ models:
         tests: [not_null, non_negative]
       - name: orbs_granted
         tests: [not_null, non_negative]
+
+  - name: stg_ads_device_identities
+    description: >
+      One row per device, carrying only what is observable about it. There is no user
+      column by design: whether a device belongs to a person is the question the
+      identity graph answers, not an input it is given. signed_in_account_id is the
+      only deterministic link and is null for roughly a third of devices.
+    columns:
+      - name: device_id
+        tests: [unique, not_null]
+      - name: platform
+        tests:
+          - not_null
+          - accepted_values: {values: ["desktop", "mobile", "web"]}
+      - name: signed_in_account_id
+        description: "Nullable. Present only where the client was signed in."
+      - name: ip_prefix
+        tests: [not_null]
+      - name: observed_sessions
+        tests: [not_null, non_negative]
+      - name: has_account_link
+        tests: [not_null]

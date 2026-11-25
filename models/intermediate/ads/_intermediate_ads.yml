@@ -104,3 +104,19 @@ models:
         tests: [not_null, non_negative]
       - name: progress_pct
         tests: [not_null, non_negative]
+
+  - name: int_ads_conversions_resolved
+    description: >
+      Conversions with identity applied once — the observed identifier where there is
+      one, the graph's resolution where there is not — so conversion counts and
+      attributed counts can never resolve identity differently and disagree.
+    columns:
+      - name: conversion_id
+        tests: [unique, not_null]
+      - name: conversion_device_id
+        tests: [not_null]
+      - name: is_identity_recovered
+        description: "Attributable only because the graph found an owner; how the graph's value is measured."
+        tests: [not_null]
+      - name: is_unidentified
+        tests: [not_null]

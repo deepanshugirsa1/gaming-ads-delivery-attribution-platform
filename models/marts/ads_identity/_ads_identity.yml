@@ -1,0 +1,59 @@
+version: 2
+
+models:
+  - name: dim_identity_graph
+    description: >
+      One row per device: who it resolves to, by what method, with what confidence.
+      Unresolved devices are kept with the reason — the unresolved population is what
+      you are trying to shrink, and you cannot manage what you filtered out.
+      devices_for_user shows the graph from the other side, where an over-matching
+      probabilistic rule becomes visible before it reaches attribution.
+    columns:
+      - name: device_id
+        tests: [unique, not_null]
+      - name: resolution_method
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["deterministic", "probabilistic", "ambiguous", "below_threshold", "no_signal"]
+      - name: is_resolved
+        tests: [not_null]
+      - name: devices_for_user
+        tests: [not_null, non_negative]
+      - name: resolved_without_any_deterministic_anchor
+        description: "A person held together entirely by inference; every conversion credited through them rests on it."
+        tests: [not_null]
+
+  - name: mart_identity_resolution_coverage
+    description: >
+      Device coverage by platform and method. Deterministic share is the number to
+      protect — the only coverage that costs nothing in accuracy. The three unresolved
+      reasons are kept apart because they have different owners: ambiguous is a
+      modelling limit, below_threshold is a tuning choice, no_signal is a collection gap.
+    columns:
+      - name: platform
+        tests: [not_null]
+      - name: resolution_method
+        tests: [not_null]
+      - name: devices
+        tests: [not_null, non_negative]
+      - name: share_of_all_devices
+        tests: [non_negative]
+
+  - name: mart_identity_attribution_impact
+    description: >
+      What the graph is worth, in conversions: how many would have been unattributable
+      without it and what they were worth. attribution_coverage_without_graph is an
+      explicit counterfactual and an upper bound on the graph's contribution, not a
+      measurement, and is labelled as such.
+    columns:
+      - name: converted_date
+        tests: [unique, not_null]
+      - name: conversions
+        tests: [not_null, non_negative]
+      - name: identity_recovered_by_graph
+        tests: [not_null, non_negative]
+      - name: attributed_only_via_graph
+        tests: [not_null, non_negative]
+      - name: attribution_coverage
+        tests: [non_negative]

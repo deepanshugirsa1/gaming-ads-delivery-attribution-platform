@@ -4,7 +4,7 @@ Four layers, each catching what the one before it cannot.
 
 ## 1. Before the warehouse — `scripts/validate_generated_data.py`
 
-34 checks on the generated feeds: referential integrity, auction mechanics, targeting
+43 checks on the generated feeds: referential integrity, auction mechanics, targeting
 enforcement, quest reward rules, reservation priority, and confirmation that **every
 planted failure mode is present at its planted rate**.
 
@@ -21,7 +21,7 @@ high volume. The band tightens automatically as generated volume grows.
 Schema tests across every model: `unique`, `not_null`, `accepted_values`,
 `relationships`, and a custom `non_negative`.
 
-**18 singular tests** assert cross-model invariants that no column check can:
+**22 singular tests** assert cross-model invariants that no column check can:
 
 | Test | Catches |
 |---|---|
@@ -41,6 +41,10 @@ Schema tests across every model: `unique`, `not_null`, `accepted_values`,
 | `assert_clicks_never_precede_impressions` | clock skew between collectors |
 | `assert_impressions_never_exceed_requests` | deduplication failing |
 | `assert_rates_are_bounded` | a join fanning out |
+| `assert_ambiguous_devices_are_never_resolved` | guessing between two known people on one network, which credits one person's conversion to another |
+| `assert_probabilistic_never_scores_as_deterministic` | an inferred match claiming the confidence of an observed one |
+| `assert_recovered_identity_has_a_resolved_device` | the identity-recovered flag being true with no resolution behind it, which overstates the graph's value |
+| `assert_unidentified_conversions_are_never_attributed` | the candidate join matching on something other than a person |
 | `assert_every_bid_resolves_its_entities` | a dimension join failing, which surfaces as a silently null feature rather than a missing row |
 
 ## 3. Monitoring marts

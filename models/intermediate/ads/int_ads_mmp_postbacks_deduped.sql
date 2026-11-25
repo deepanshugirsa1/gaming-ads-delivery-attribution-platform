@@ -23,6 +23,7 @@ select
     advertiser_id,
     claimed_campaign_id,
     claimed_user_id,
+    claimed_device_id,
     event_name,
     event_at,
     event_date,

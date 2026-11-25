@@ -24,6 +24,12 @@ for a reservation buy, accumulated minutes for a playtime quest. Milestones are 
 as events, so the warehouse answers *where people stop* rather than just how many
 finished — and every rate is computed inside a format, never across them.
 
+**Identity.** A person arrives from several devices, a client can be signed out, an
+identifier can be cleared, and a conversion can land on a different device from the one
+that saw the ad. A deterministic-plus-probabilistic graph resolves device to person,
+leaves ambiguous networks unresolved rather than guessing, and is scored against ground
+truth the models never see.
+
 **Delivery.** An ad request is an opportunity to serve, logged whether or not anything
 serves. Eligible campaigns bid, one wins, and the impression may still fail to render.
 Requests, bids, impressions and clicks are each facts in their own right, so fill rate,
@@ -95,6 +101,13 @@ permanent 60% "coverage gap" that is pure scope mismatch, and someone spends a w
 investigating it. A minimum-volume floor stops two conversions against three from being
 reported as a 50% breach.
 
+**Misattributing is worse than not attributing, and the thresholds say so.** An
+unattributed conversion understates one campaign; a misattributed one also overstates a
+different one and poisons the labels a ranker trains on, so the error compounds into the
+model instead of staying in a report. Hence a confidence floor that leaves devices
+unresolved, ambiguous networks never guessed, and an identity check that fails the build
+on precision rather than coverage.
+
 **Reserved inventory takes its slot, it does not outbid.** A reservation that merely bid
 very high would appear in the bid landscape and distort every clearing-price statistic,
 so it is modelled as priority. `mart_auction_landscape_daily` then cuts win rate by
@@ -120,21 +133,22 @@ $0.004 — a 5% spend error appearing only on the local target.
 
 | Layer | What it catches |
 |---|---|
-| `scripts/validate_generated_data.py` | 34 checks on the generated feeds before the warehouse sees them: referential integrity, auction mechanics, targeting enforcement, and that every planted failure mode is actually present at its planted rate |
+| `scripts/validate_generated_data.py` | 43 checks on the generated feeds before the warehouse sees them: referential integrity, auction mechanics, targeting enforcement, and that every planted failure mode is actually present at its planted rate |
 | dbt schema tests | uniqueness, nullability, referential integrity, accepted values, non-negativity |
-| 18 singular tests | cross-model invariants: spend reconciliation, hourly against daily, one attributed touchpoint per conversion, multi-touch credit summing to one, cross-advertiser credit, window compliance, feature leakage, label maturity |
+| 22 singular tests | cross-model invariants: spend reconciliation, hourly against daily, one attributed touchpoint per conversion, multi-touch credit summing to one, cross-advertiser credit, window compliance, feature leakage, label maturity |
 | `mart_ads_pipeline_health` | per-feed volume, duplicate rate and arrival lag against an SLA registry |
 | `mart_ml_feature_health_daily` | per-feature null rate, distribution and drift against its own trailing baseline |
 | `scripts/quality_gate.py` | ten gates over those marts plus dbt's own test results; writes a report and exits non-zero |
 | `scripts/detect_anomalies.py` | robust anomaly detection on daily delivery series, weekday/weekend matched |
 | `scripts/validate_attribution.py` | the derived attribution against generator ground truth, which the models cannot see |
+| `scripts/validate_identity.py` | identity resolution precision against ground truth, per method; deterministic must be exact |
 
 A note on two of those, because the method matters more than the existence.
 
-*Freshness is measured against the pipeline, not the clock.* The dataset is historical,
-so a wall-clock freshness check marks everything permanently stale and the signal gets
-ignored. "How far behind the rest of the pipeline is this feed" still has a useful
-answer, and it keeps working during a backfill or a replay.
+*Freshness is measured against peer feeds, not the clock.* A wall-clock check marks a
+historical extract stale forever. Comparing every feed to the single newest ingest does
+the same thing, because conversions are allowed to land days later. A feed is late when
+it falls behind the feeds with an equal or tighter SLA.
 
 *Anomaly detection uses the median and a floored robust spread, not mean and standard
 deviation.* The outlier being hunted is in the baseline, and one spike inflates a
@@ -263,6 +277,7 @@ models/
                       funnel, budget pacing, auction landscape by advertiser tier
     ads_measurement/  parity, partner health, window sensitivity, multi-touch, pipeline health
     ads_ml/           ranking features, labels, training set, feature health, skew
+    ads_identity/     device-to-person graph, resolution coverage, attribution impact
 macros/               cross-warehouse helpers: ads_raw, safe_div, pctl, decimal6
 tests/                singular tests asserting cross-model invariants
 scripts/              generation checks, lint, quality gate, anomaly detection,
@@ -287,3 +302,4 @@ docs/                 metric definitions, attribution spec, ML spec, quality and
 | `docs/06_data_quality_and_sla.md` | Every check and threshold, and why each number was chosen |
 | `docs/07_bigquery_runbook.md` | Running on BigQuery, free-tier cost, partitioning |
 | `docs/08_model_walkthrough.md` | Every model in dependency order, plus the ten questions to answer cold |
+| `docs/09_identity_spec.md` | Device-to-person resolution, the confidence floor, and why precision beats coverage |

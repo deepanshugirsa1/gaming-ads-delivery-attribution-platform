@@ -81,7 +81,7 @@ class Checks:
 def main() -> int:
     manifest_path = os.path.join(ADS, "_manifest.json")
     manifest = json.load(open(manifest_path)) if os.path.exists(manifest_path) else {}
-    planted = manifest.get("planted_anomaly_rates", {})
+    planted = {**manifest.get("planted_anomaly_rates", {}), **manifest.get("identity_rates", {})}
 
     users = pd.read_csv(os.path.join(SEEDS, "raw_users.csv"))
     servers = pd.read_csv(os.path.join(SEEDS, "raw_servers.csv"))
@@ -96,6 +96,8 @@ def main() -> int:
     conversions = load("ads_conversions")
     postbacks = load("ads_mmp_postbacks")
     progress = load("ads_quest_progress")
+    devices = load("ads_device_identities")
+    identity_truth = pd.read_csv(os.path.join(ADS, "_ground_truth_identity.csv.gz"))
     truth = pd.read_csv(os.path.join(ADS, "_ground_truth_attribution.csv.gz"))
 
     c = Checks()
@@ -216,9 +218,16 @@ def main() -> int:
     c.expect_rate("duplicate postback retransmissions present", pb_dup,
                   planted.get("mmp_duplicate_postbacks", 0.02), n=len(postbacks))
 
+    # Identity loss on a postback is compound, not a single rate. The partner can only
+    # pass an identifier we had in the first place, so a postback loses its user if
+    # first-party identity was already missing OR the partner drops its own. Comparing
+    # against the partner's rate alone would flag healthy data every run.
     null_user = postbacks["claimed_user_id"].isna().mean()
-    c.expect_rate("postbacks with no usable user identifier present", null_user,
-                  planted.get("mmp_null_user", 0.03), n=len(postbacks))
+    p_first_party = planted.get("unidentified_conversions", 0.12)
+    p_partner = planted.get("mmp_null_user", 0.03)
+    expected_null = 1 - (1 - p_first_party) * (1 - p_partner)
+    c.expect_rate("postbacks with no usable user identifier (compound loss)", null_user,
+                  expected_null, n=len(postbacks))
 
     mmp_only = (~postbacks["claimed_user_id"].isna()) & (
         ~postbacks["postback_id"].str.startswith("pb_only_") == False
@@ -341,6 +350,60 @@ def main() -> int:
         postbacks["feed_contract"].nunique() == 2,
         str(postbacks["feed_contract"].value_counts().to_dict()),
     )
+
+    # ---------------- identity signals ----------------
+    c.check(
+        "device feed carries no user column",
+        "user_id" not in devices.columns and "true_user_id" not in devices.columns,
+        "ownership is a question for the graph, not an input to it",
+    )
+    dev_ids = set(devices["device_id"])
+    c.check("requests reference a real device",
+            requests["device_id"].isin(dev_ids).all(),
+            f"{(~requests['device_id'].isin(dev_ids)).sum()} unknown device ids on requests")
+    c.check("conversions reference a real device",
+            conversions["conversion_device_id"].isin(dev_ids).all(),
+            f"{(~conversions['conversion_device_id'].isin(dev_ids)).sum()} unknown device ids")
+    c.check("ground truth covers every device",
+            set(identity_truth["device_id"]) == dev_ids,
+            f"{len(identity_truth):,} truth rows against {len(dev_ids):,} devices")
+
+    signed_in = devices["signed_in_account_id"].notna().mean()
+    c.expect_rate("devices with an observable account link", signed_in,
+                  planted.get("signed_in_devices", 0.70), n=len(devices))
+
+    unident = conversions["user_id"].isna().mean()
+    c.expect_rate("conversions arriving with no user identifier", unident,
+                  planted.get("unidentified_conversions", 0.12), n=len(conversions))
+
+    # a conversion on a device other than the one that saw the ad
+    imp_dev = impressions.drop_duplicates("impression_id").set_index("impression_id")["device_id"]
+    t3 = truth[truth["truth_impression_id"].notna()].copy()
+    t3["serving_device"] = t3["truth_impression_id"].map(imp_dev)
+    conv_dev = conversions.set_index("conversion_id")["conversion_device_id"]
+    t3["conv_device"] = t3["conversion_id"].map(conv_dev)
+    t3 = t3.dropna(subset=["serving_device", "conv_device"])
+    # Measured over people who actually have more than one device — the only
+    # population for whom a cross-device conversion is possible at all.
+    devices_per_user = identity_truth.groupby("true_user_id").size()
+    t3["device_count"] = t3["user_id"].map(devices_per_user)
+    t3_multi = t3[t3["device_count"] > 1]
+    cross = (t3_multi["serving_device"] != t3_multi["conv_device"]).mean() if len(t3_multi) else 0
+    c.expect_rate("multi-device people converting on a different device", cross,
+                  planted.get("cross_device_conversions", 0.22), n=max(len(t3_multi), 1))
+
+    recoverable = postbacks[postbacks["claimed_user_id"].isna()]
+    c.check(
+        "postbacks with no user still carry a device",
+        len(recoverable) == 0 or recoverable["claimed_device_id"].notna().all(),
+        f"{len(recoverable)} postbacks lack a user; all retain a device identifier",
+    )
+
+    multi_device_users = identity_truth.groupby("true_user_id").size()
+    c.check("people have more than one device",
+            (multi_device_users > 1).any(),
+            f"median {multi_device_users.median():.0f} devices per person, "
+            f"max {multi_device_users.max()}")
 
     # ---------------- plausibility of headline rates ----------------
     imp_unique = impressions["impression_id"].nunique()

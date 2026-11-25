@@ -46,6 +46,10 @@ select
     cv.converted_date,
     cv.conversion_value_usd,
     cv.device_platform,
+    cv.conversion_device_id,
+    cv.had_observed_identity,
+    cv.is_identity_recovered,
+    cv.device_resolution_method,
     cv.ingest_lag_minutes,
 
     w.campaign_id            as attributed_campaign_id,

@@ -138,6 +138,17 @@ MMP_NULL_USER_RATE = 0.03        # postback arrives with no usable user identifi
 MMP_DUP_RATE = 0.02              # postback retransmitted with the same postback_id
 MMP_ONLY_RATE = 0.04             # MMP reports a conversion we have no record of
 
+# Identity. A person reaches the platform from more than one device, and the link
+# between device and account is not always observable: a signed-out client, a cleared
+# advertising identifier, a conversion recorded on a different device from the ad.
+# These are the rates the identity graph has to recover from.
+DEVICES_PER_USER = (1, 4)
+SIGNED_IN_DEVICE_RATE = 0.70      # devices with an observable account link
+SHARED_IP_RATE = 0.85             # a user's devices usually share a network prefix
+MOBILE_AD_ID_RATE = 0.80          # mobile devices carrying an advertising identifier
+CROSS_DEVICE_CONVERSION_RATE = 0.22   # of multi-device people, share converting elsewhere
+UNIDENTIFIED_CONVERSION_RATE = 0.12   # conversion arrives with no user identifier
+
 # Reward thresholds, from the public description of the formats.
 VIDEO_REWARD_SECONDS = 15        # video_quest grants the reward at ~15 seconds viewed
 PLAY_REWARD_MINUTES = (10, 30)   # play and arena quests require this many minutes
@@ -182,10 +193,22 @@ SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("duration_sec", "INT64"),
         ("created_ts", "TIMESTAMP"),
     ],
+    "ads_device_identities": [
+        ("device_id", "STRING"),
+        ("platform", "STRING"),
+        ("signed_in_account_id", "STRING"),
+        ("device_ad_id", "STRING"),
+        ("ip_prefix", "STRING"),
+        ("ua_fingerprint", "STRING"),
+        ("first_seen_ts", "TIMESTAMP"),
+        ("last_seen_ts", "TIMESTAMP"),
+        ("observed_sessions", "INT64"),
+    ],
     "ads_requests": [
         ("request_id", "STRING"),
         ("request_ts", "TIMESTAMP"),
         ("user_id", "STRING"),
+        ("device_id", "STRING"),
         ("server_id", "STRING"),
         ("placement", "STRING"),
         ("device_platform", "STRING"),
@@ -210,6 +233,7 @@ SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("campaign_id", "STRING"),
         ("creative_id", "STRING"),
         ("user_id", "STRING"),
+        ("device_id", "STRING"),
         ("server_id", "STRING"),
         ("placement", "STRING"),
         ("impression_ts", "TIMESTAMP"),
@@ -229,6 +253,7 @@ SCHEMAS: dict[str, list[tuple[str, str]]] = {
     "ads_conversions": [
         ("conversion_id", "STRING"),
         ("user_id", "STRING"),
+        ("conversion_device_id", "STRING"),
         ("advertiser_id", "STRING"),
         ("conversion_type", "STRING"),
         ("conversion_ts", "TIMESTAMP"),
@@ -259,6 +284,7 @@ SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("advertiser_id", "STRING"),
         ("claimed_campaign_id", "STRING"),
         ("claimed_user_id", "STRING"),
+        ("claimed_device_id", "STRING"),
         ("event_name", "STRING"),
         ("event_ts", "TIMESTAMP"),
         ("received_ts", "TIMESTAMP"),
@@ -499,6 +525,51 @@ def main() -> None:
     countries = sorted(users["country"].unique().tolist())
     platforms = ["desktop", "mobile", "web"]
 
+    # ---- devices and the signals an identity graph can actually observe -------
+    # A person reaches the platform from more than one device, and the link between a
+    # device and an account is only sometimes observable. A signed-out client has no
+    # account id; a cleared advertising identifier leaves nothing deterministic; a
+    # conversion can land on a different device from the one that saw the ad.
+    #
+    # What is emitted here is the *observable* signal, never the truth. The true
+    # device-to-person mapping goes to a ground-truth file that is deliberately not
+    # loaded, so the resolution models have to earn their matches and the precision of
+    # the probabilistic ones can be measured rather than asserted.
+    home_ip = [f"10.{int(rng.integers(0, 256))}.{int(rng.integers(0, 256))}" for _ in range(len(users))]
+    dev_rows, dev_owner = [], []
+    for ui in range(len(users)):
+        for j in range(int(rng.integers(DEVICES_PER_USER[0], DEVICES_PER_USER[1]))):
+            did = f"dev_{len(dev_rows):07d}"
+            plat = user_platform[ui] if j == 0 else str(rng.choice(platforms))
+            signed_in = rng.random() < SIGNED_IN_DEVICE_RATE
+            has_adid = plat == "mobile" and rng.random() < MOBILE_AD_ID_RATE
+            first = window_start + pd.Timedelta(days=int(rng.integers(0, max((window_end - window_start).days, 1))))
+            dev_rows.append({
+                "device_id": did,
+                "platform": plat,
+                # the deterministic link, present only when the client was signed in
+                "signed_in_account_id": users["user_id"].iloc[ui] if signed_in else None,
+                "device_ad_id": f"adid_{len(dev_rows):07d}" if has_adid else None,
+                # devices in one household usually share a network prefix: the main
+                # probabilistic signal, and on its own far too weak to match on
+                "ip_prefix": home_ip[ui] if rng.random() < SHARED_IP_RATE
+                             else f"10.{int(rng.integers(0, 256))}.{int(rng.integers(0, 256))}",
+                "ua_fingerprint": f"ua_{plat}_{int(rng.integers(0, 40))}",
+                "first_seen_ts": fmt_ts([first])[0],
+                "last_seen_ts": fmt_ts([first + pd.Timedelta(days=int(rng.integers(1, 30)))])[0],
+                "observed_sessions": int(rng.poisson(12) + 1),
+            })
+            dev_owner.append(ui)
+
+    devices_df = pd.DataFrame(dev_rows)
+    dev_ids = devices_df["device_id"].to_numpy()
+    dev_owner = np.array(dev_owner)
+    dev_order = np.argsort(dev_owner, kind="stable")
+    dev_ids_sorted = dev_ids[dev_order]
+    dev_owner_sorted = dev_owner[dev_order]
+    dev_start = np.searchsorted(dev_owner_sorted, np.arange(len(users)), side="left")
+    dev_count = np.searchsorted(dev_owner_sorted, np.arange(len(users)), side="right") - dev_start
+
     advertisers, campaigns, creatives, camp_start, camp_end = build_entities(
         rng, universe, args.advertisers, args.campaigns, window_start, window_end
     )
@@ -554,6 +625,7 @@ def main() -> None:
     print(f"active user-days: {len(active):,}  ->  ad requests: {total_requests:,}")
 
     writers = {name: TableWriter(name) for name in SCHEMAS}
+    writers["ads_device_identities"].write(devices_df)
     writers["ads_advertisers"].write(advertisers)
     writers["ads_campaigns"].write(campaigns)
     writers["ads_creatives"].write(creatives)
@@ -580,6 +652,12 @@ def main() -> None:
         srv = mem_server[pick]
         srv_cat = server_category.reindex(srv).to_numpy()
 
+        dpick = np.clip(
+            dev_start[u_idx] + (rng.random(n) * np.maximum(dev_count[u_idx], 1)).astype(int),
+            0, len(dev_ids_sorted) - 1,
+        )
+        req_device = dev_ids_sorted[dpick]
+
         placement = rng.choice(PLACEMENTS, size=n, p=[0.30, 0.20, 0.10, 0.15, 0.25])
         platform = user_platform[u_idx]
         country = user_country[u_idx]
@@ -605,6 +683,7 @@ def main() -> None:
                     "request_id": request_ids,
                     "request_ts": fmt_ts(req_ts),
                     "user_id": u_ids,
+                    "device_id": req_device,
                     "server_id": srv,
                     "placement": placement,
                     "device_platform": platform,
@@ -710,6 +789,7 @@ def main() -> None:
                 "campaign_id": campaigns["campaign_id"].to_numpy()[wc],
                 "creative_id": crt_id[w_crt],
                 "user_id": u_ids[wr],
+                "device_id": req_device[wr],
                 "server_id": srv[wr],
                 "placement": placement[wr],
                 "impression_ts": fmt_ts(imp_ts),
@@ -895,6 +975,7 @@ def main() -> None:
                 pd.DataFrame(
                     {
                         "user_id": u_ids[wr[clicked][converts]],
+                        "serving_device_id": req_device[wr[clicked][converts]],
                         "advertiser_id": camp_advertiser[wc[clicked][converts]],
                         "conversion_type": ev,
                         "conversion_ts": c_ts,
@@ -919,6 +1000,7 @@ def main() -> None:
                 pd.DataFrame(
                     {
                         "user_id": u_ids[wr[vt]],
+                        "serving_device_id": req_device[wr[vt]],
                         "advertiser_id": camp_advertiser[wc[vt]],
                         "conversion_type": ev,
                         "conversion_ts": c_ts,
@@ -935,7 +1017,7 @@ def main() -> None:
     conv = (
         pd.concat(conv_records, ignore_index=True)
         if conv_records
-        else pd.DataFrame(columns=["user_id", "advertiser_id", "conversion_type", "conversion_ts",
+        else pd.DataFrame(columns=["user_id", "serving_device_id", "advertiser_id", "conversion_type", "conversion_ts",
                                    "conversion_value_usd", "truth_campaign_id", "truth_touchpoint",
                                    "truth_impression_id", "device_platform"])
     )
@@ -956,6 +1038,10 @@ def main() -> None:
                 pd.DataFrame(
                     {
                         "user_id": users["user_id"].to_numpy()[oi],
+                        "serving_device_id": dev_ids_sorted[
+                            np.clip(dev_start[oi] + (rng.random(n_org) * np.maximum(dev_count[oi], 1)).astype(int),
+                                    0, len(dev_ids_sorted) - 1)
+                        ],
                         "advertiser_id": rng.choice(advertisers["advertiser_id"], size=n_org),
                         "conversion_type": ev,
                         "conversion_ts": o_ts,
@@ -980,11 +1066,42 @@ def main() -> None:
     conv["ingest_ts"] = conv["conversion_ts"] + pd.to_timedelta(lag_h, unit="h")
     conv["source_system"] = "first_party_sdk"
 
+    # ---- cross-device behaviour and identity loss -------------------------
+    # A fifth of conversions happen on a different device from the one that saw the
+    # ad: someone watches a quest on mobile and buys on desktop. Attribution that
+    # joins on device alone misses every one of them.
+    uidx_conv = conv["user_id"].map(user_index).to_numpy()
+    serving_dev = conv["serving_device_id"].to_numpy(dtype=object)
+    counts = np.maximum(dev_count[uidx_conv], 1)
+    pos = dev_start[uidx_conv] + (rng.random(len(conv)) * counts).astype(int)
+    # Drawing a device at random can land on the serving device again, which silently
+    # halves the cross-device rate. Where it does, step to the next device in that
+    # person's block so the alternative really is an alternative.
+    collided = dev_ids_sorted[np.clip(pos, 0, len(dev_ids_sorted) - 1)] == serving_dev
+    stepped = dev_start[uidx_conv] + ((pos - dev_start[uidx_conv] + 1) % counts)
+    pos = np.where(collided, stepped, pos)
+    alt_dev = dev_ids_sorted[np.clip(pos, 0, len(dev_ids_sorted) - 1)]
+
+    # Only someone with more than one device can convert on a different one, so the
+    # rate is defined over that population rather than over everyone.
+    multi_device = dev_count[uidx_conv] > 1
+    crossed = multi_device & (rng.random(len(conv)) < CROSS_DEVICE_CONVERSION_RATE)
+    conv["conversion_device_id"] = np.where(crossed, alt_dev, serving_dev)
+
+    # Some conversions arrive with no user identifier at all -- a signed-out client,
+    # a cleared identifier, a partner that cannot pass one. The device is all that is
+    # left. These rows are the whole reason an identity graph exists: without one they
+    # are simply unattributable, and the spend that produced them looks wasted.
+    identity_lost = rng.random(len(conv)) < UNIDENTIFIED_CONVERSION_RATE
+    conv["observed_user_id"] = np.where(identity_lost, None, conv["user_id"].to_numpy(dtype=object))
+
     writers["ads_conversions"].write(
         pd.DataFrame(
             {
                 "conversion_id": conv["conversion_id"],
-                "user_id": conv["user_id"],
+                # the identifier as *observed*, which is sometimes nothing
+                "user_id": conv["observed_user_id"],
+                "conversion_device_id": conv["conversion_device_id"],
                 "advertiser_id": conv["advertiser_id"],
                 "conversion_type": conv["conversion_type"],
                 "conversion_ts": fmt_ts(conv["conversion_ts"]),
@@ -1031,8 +1148,13 @@ def main() -> None:
     missing_truth = pd.isna(claimed_campaign)
     claimed_campaign[missing_truth] = rng.choice(all_campaign_ids, size=int(missing_truth.sum()))
 
-    claimed_user = reported["user_id"].to_numpy(dtype=object).copy()
+    # The partner can only claim what it observed. Where first-party identity was
+    # already lost, the postback cannot carry a user either -- and the partner drops a
+    # further share of its own. The device identifier survives both, which is what
+    # makes those postbacks recoverable rather than discarded.
+    claimed_user = reported["observed_user_id"].to_numpy(dtype=object).copy()
     claimed_user[rng.random(len(reported)) < MMP_NULL_USER_RATE] = None
+    claimed_device = reported["conversion_device_id"].to_numpy(dtype=object).copy()
 
     pb = pd.DataFrame(
         {
@@ -1042,6 +1164,7 @@ def main() -> None:
             "advertiser_id": reported["advertiser_id"].to_numpy(),
             "claimed_campaign_id": claimed_campaign,
             "claimed_user_id": claimed_user,
+            "claimed_device_id": claimed_device,
             "event_name": reported["conversion_type"].to_numpy(),
             "event_ts": reported["conversion_ts"].to_numpy(),
             "claimed_attribution_type": np.where(
@@ -1070,6 +1193,10 @@ def main() -> None:
                 "advertiser_id": rng.choice(advertisers["advertiser_id"], size=n_only),
                 "claimed_campaign_id": rng.choice(all_campaign_ids, size=n_only),
                 "claimed_user_id": users["user_id"].to_numpy()[oi],
+                "claimed_device_id": dev_ids_sorted[
+                    np.clip(dev_start[oi] + (rng.random(n_only) * np.maximum(dev_count[oi], 1)).astype(int),
+                            0, len(dev_ids_sorted) - 1)
+                ],
                 "event_name": rng.choice(["install", "purchase"], size=n_only),
                 "event_ts": o_ts,
                 "claimed_attribution_type": "click_through",
@@ -1096,6 +1223,7 @@ def main() -> None:
                 "advertiser_id": pb["advertiser_id"],
                 "claimed_campaign_id": pb["claimed_campaign_id"],
                 "claimed_user_id": pb["claimed_user_id"],
+                "claimed_device_id": pb["claimed_device_id"],
                 "event_name": pb["event_name"],
                 "event_ts": fmt_ts(pb["event_ts"]),
                 "received_ts": fmt_ts(pb["received_ts"]),
@@ -1106,6 +1234,14 @@ def main() -> None:
     )
 
     # ---- ground truth, for validating attribution (never loaded) ----------
+    identity_truth = pd.DataFrame({
+        "device_id": dev_ids_sorted,
+        "true_user_id": users["user_id"].to_numpy()[dev_owner_sorted],
+    })
+    identity_truth.to_csv(
+        os.path.join(OUT_DIR, "_ground_truth_identity.csv.gz"), index=False, compression="gzip"
+    )
+
     truth_path = os.path.join(OUT_DIR, "_ground_truth_attribution.csv.gz")
     conv[["conversion_id", "user_id", "truth_campaign_id", "truth_touchpoint",
           "truth_impression_id", "conversion_ts"]].to_csv(truth_path, index=False, compression="gzip")
@@ -1130,6 +1266,13 @@ def main() -> None:
         "window_end": str(window_end),
         "row_counts": counts,
         "total_rows": int(sum(counts.values())),
+        "identity_rates": {
+            "signed_in_devices": SIGNED_IN_DEVICE_RATE,
+            "shared_ip": SHARED_IP_RATE,
+            "mobile_ad_id": MOBILE_AD_ID_RATE,
+            "cross_device_conversions": CROSS_DEVICE_CONVERSION_RATE,
+            "unidentified_conversions": UNIDENTIFIED_CONVERSION_RATE,
+        },
         "planted_anomaly_rates": {
             "duplicate_impressions": DUP_IMPRESSION_RATE,
             "orphan_clicks": ORPHAN_CLICK_RATE,

@@ -1,0 +1,47 @@
+version: 2
+
+models:
+  - name: int_identity_deterministic_links
+    description: >
+      Devices whose owner is known for certain, because the client was signed in. The
+      spine of the graph — every probabilistic match is anchored to these rows, so a
+      wrong deterministic link propagates to every device sharing its network.
+    columns:
+      - name: device_id
+        tests: [unique, not_null]
+      - name: resolved_user_id
+        tests: [not_null]
+
+  - name: int_identity_probabilistic_candidates
+    description: >
+      Candidate owners for devices with no account link, scored from named components
+      (shared network, platform agreement, overlapping windows, corroborating devices)
+      and capped below 1.0 so a probabilistic match can never score as a deterministic
+      one. Ambiguous networks are flagged, not guessed.
+    columns:
+      - name: device_id
+        tests: [unique, not_null]
+      - name: candidate_user_id
+        tests: [not_null]
+      - name: match_confidence
+        tests: [not_null, non_negative]
+      - name: is_ambiguous
+        description: "Two or more known owners on one network; downstream leaves these unresolved."
+        tests: [not_null]
+
+  - name: int_identity_resolved_devices
+    description: >
+      One row per device with its resolved owner, method and confidence. Probabilistic
+      candidates are accepted only when unambiguous and above identity_min_confidence;
+      failures are recorded with a reason rather than dropped, because "could not tell"
+      and "never saw a signal" need different fixes.
+    columns:
+      - name: device_id
+        tests: [unique, not_null]
+      - name: resolution_method
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["deterministic", "probabilistic", "ambiguous", "below_threshold", "no_signal"]
+      - name: is_deterministic
+        tests: [not_null]

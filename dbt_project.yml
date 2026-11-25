@@ -83,6 +83,12 @@ vars:
   ads_raw_dataset: ads_raw
   ads_raw_path: "data/ads"
 
+  # Minimum confidence before a probabilistic identity match is used for
+  # attribution. Set at 0.6 so a bare network match (0.50) is never enough on its
+  # own: crediting one person's conversion to another is a worse failure than
+  # leaving it unattributed, and the floor is where that judgement is written down.
+  identity_min_confidence: 0.60
+
   # Feature monitoring thresholds. A feature whose daily mean moves more than this
   # against its trailing baseline, or whose null rate exceeds the floor, is flagged
   # as an ML input problem before it reaches a model rather than after the model's
@@ -107,6 +113,8 @@ models:
       +schema: intermediate
       ads:
         +schema: intermediate
+      identity:
+        +schema: intermediate
     marts:
       +materialized: table
       +schema: marts
@@ -118,6 +126,8 @@ models:
         +schema: ads_measurement
       ads_ml:
         +schema: ads_ml
+      ads_identity:
+        +schema: ads_identity
 
 seeds:
   gaming_ads_platform:

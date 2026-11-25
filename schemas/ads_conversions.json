@@ -10,6 +10,11 @@
     "mode": "NULLABLE"
   },
   {
+    "name": "conversion_device_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
     "name": "advertiser_id",
     "type": "STRING",
     "mode": "NULLABLE"

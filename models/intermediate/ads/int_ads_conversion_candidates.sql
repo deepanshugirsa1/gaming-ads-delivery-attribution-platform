@@ -81,7 +81,12 @@ touchpoints as (
 ),
 
 conversions as (
-    select * from {{ ref('stg_ads_conversions') }}
+    -- Resolved identity, not the observed identifier. A conversion whose owner was
+    -- recovered by the graph joins to that person's touchpoints exactly as any other
+    -- conversion does; one that stays unidentified has a null user_id and matches
+    -- nothing, which is the correct outcome rather than a silent drop.
+    select * from {{ ref('int_ads_conversions_resolved') }}
+    where user_id is not null
 )
 
 select

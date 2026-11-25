@@ -16,7 +16,7 @@
 -- and that is how a measurement conversation stops being possible.
 
 with conversions as (
-    select * from {{ ref('stg_ads_conversions') }}
+    select * from {{ ref('int_ads_conversions_resolved') }}
 
     {% if is_incremental() %}
     where ingested_at >= (
@@ -32,6 +32,14 @@ with conversions as (
 select
     conversion_id,
     user_id,
+    observed_user_id,
+    conversion_device_id,
+    device_resolution_method,
+    device_resolution_confidence,
+    had_observed_identity,
+    -- attributable only because the identity graph found an owner
+    is_identity_recovered,
+    is_unidentified,
     advertiser_id,
     conversion_type,
     converted_at,

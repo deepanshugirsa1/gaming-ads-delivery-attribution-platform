@@ -4,7 +4,11 @@ with source as (
 
 select
     cast(conversion_id as string)                   as conversion_id,
-    cast(user_id as string)                         as user_id,
+    -- Nullable on purpose. A conversion can arrive with no user identifier at all,
+    -- and replacing that with a placeholder would hide the exact population the
+    -- identity graph exists to recover.
+    cast(user_id as string)                         as observed_user_id,
+    cast(conversion_device_id as string)            as conversion_device_id,
     cast(advertiser_id as string)                   as advertiser_id,
     lower(cast(conversion_type as string))          as conversion_type,
     cast(conversion_ts as timestamp)                as converted_at,

@@ -17,6 +17,7 @@ select
     cast(advertiser_id as string)                    as advertiser_id,
     cast(claimed_campaign_id as string)              as claimed_campaign_id,
     cast(claimed_user_id as string)                  as claimed_user_id,
+    cast(claimed_device_id as string)                as claimed_device_id,
     lower(cast(event_name as string))                as event_name,
     cast(event_ts as timestamp)                      as event_at,
     cast(event_ts as date)                           as event_date,

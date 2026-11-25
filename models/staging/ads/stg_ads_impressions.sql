@@ -12,6 +12,7 @@ select
     cast(campaign_id as string)                   as campaign_id,
     cast(creative_id as string)                   as creative_id,
     cast(user_id as string)                       as user_id,
+    cast(device_id as string)                     as device_id,
     cast(server_id as string)                     as server_id,
     lower(cast(placement as string))              as placement,
     cast(impression_ts as timestamp)              as impressed_at,

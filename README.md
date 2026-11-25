@@ -120,9 +120,9 @@ $0.004 — a 5% spend error appearing only on the local target.
 
 | Layer | What it catches |
 |---|---|
-| `scripts/validate_generated_data.py` | 24 checks on the generated feeds before the warehouse sees them: referential integrity, auction mechanics, targeting enforcement, and that every planted failure mode is actually present at its planted rate |
+| `scripts/validate_generated_data.py` | 34 checks on the generated feeds before the warehouse sees them: referential integrity, auction mechanics, targeting enforcement, and that every planted failure mode is actually present at its planted rate |
 | dbt schema tests | uniqueness, nullability, referential integrity, accepted values, non-negativity |
-| 14 singular tests | cross-model invariants: spend reconciliation, hourly against daily, one attributed touchpoint per conversion, multi-touch credit summing to one, cross-advertiser credit, window compliance, feature leakage, label maturity |
+| 18 singular tests | cross-model invariants: spend reconciliation, hourly against daily, one attributed touchpoint per conversion, multi-touch credit summing to one, cross-advertiser credit, window compliance, feature leakage, label maturity |
 | `mart_ads_pipeline_health` | per-feed volume, duplicate rate and arrival lag against an SLA registry |
 | `mart_ml_feature_health_daily` | per-feature null rate, distribution and drift against its own trailing baseline |
 | `scripts/quality_gate.py` | ten gates over those marts plus dbt's own test results; writes a report and exits non-zero |

@@ -52,10 +52,10 @@ Schema tests across every model: `unique`, `not_null`, `accepted_values`,
 - **`mart_mmp_surface_health`** — per partner contract: retransmission rate, identifier
   loss, delivery lag, internally inconsistent claims.
 
-**Freshness is measured against the pipeline, not the clock.** The dataset is
-historical, so a wall-clock check marks everything permanently stale and the signal gets
-ignored. "How far behind the rest of the pipeline is this feed" still has a useful
-answer, and it keeps working during a backfill or replay.
+**Freshness is measured against peer feeds, not the clock.** A wall-clock check marks
+a historical extract stale forever. Comparing every feed to the single newest ingest
+does the same thing, because conversions are allowed to land days later. A feed is
+late when it falls behind the feeds with an equal or tighter SLA.
 
 SLAs live in `source_freshness_registry` in `dbt_project.yml`, so renegotiating a
 threshold is a config change with a visible diff.

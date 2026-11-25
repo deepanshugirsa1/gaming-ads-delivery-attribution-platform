@@ -178,7 +178,31 @@ API but has not been executed. It is excluded from CI and from every claim made 
 until `dagster dev` has run it.
 
 <!-- STATS:START -->
-**Last `dbt build`** — not run yet. Run `dbt build --profiles-dir .` then `python scripts/update_readme_stats.py`.
+**Last `dbt build`** — target `duckdb`, dbt 1.8.7, 2026-11-25T01:15:52.429394Z
+
+- `PASS=480` of 480 nodes, `FAIL=0`, `WARN=0`, `SKIP=0`
+- 62 models, 412 tests, 6 seeds, 308s wall clock
+- lint: 62 models, 18 singular tests, DAG depth 9, 0 problems
+
+**Generated feeds** — scale 4.0, seed 42, 11,085,709 rows total
+
+| feed | rows |
+|---|---:|
+| `ads_advertisers` | 24 |
+| `ads_campaigns` | 60 |
+| `ads_creatives` | 182 |
+| `ads_requests` | 1,205,931 |
+| `ads_auction_bids` | 5,794,351 |
+| `ads_impressions` | 1,107,571 |
+| `ads_clicks` | 20,787 |
+| `ads_conversions` | 4,405 |
+| `ads_quest_progress` | 2,951,244 |
+| `ads_mmp_postbacks` | 1,154 |
+
+- generated-data checks: 34 run, 0 failed
+- quality gate: **PASS** (0 errors, 4 warnings)
+
+<sub>Block written by `scripts/update_readme_stats.py` at 2026-11-25 01:16 UTC. No number here is typed by hand.</sub>
 <!-- STATS:END -->
 
 ---

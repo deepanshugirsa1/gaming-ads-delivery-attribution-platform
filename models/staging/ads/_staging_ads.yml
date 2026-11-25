@@ -61,7 +61,7 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ["video_preroll", "display_banner", "sponsored_quest"]
+              values: ["video_quest", "video_quest_reserve", "play_quest", "arena_quest"]
       - name: duration_sec
         tests: [non_negative]
 
@@ -84,7 +84,7 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ["feed", "server_banner", "voice_lobby", "quest_hub"]
+              values: ["quest_hub", "server_feed", "voice_lobby", "game_overlay", "mobile_feed"]
       - name: device_platform
         tests:
           - not_null
@@ -210,7 +210,7 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ["mmp_alpha", "mmp_beta", "mmp_gamma"]
+              values: ["appsflyer_style", "gamesight_style"]
       - name: event_name
         tests:
           - not_null

@@ -116,12 +116,22 @@ select
     -- its presence suggests the pipeline is not doing what its author thinks.
     d.distinct_values <= 1 as is_constant,
 
-    (d.null_rate > {{ var('feature_null_rate_threshold') }}) as is_null_rate_breach,
-    (
+    -- Cold-start rates are null until a campaign has prior impressions. That null
+    -- is the feature, not a broken join, so it is not a null-rate breach.
+    (d.null_rate > {{ var('feature_null_rate_threshold') }})
+        and d.feature_name not in (
+            'campaign_prior_7d_ctr',
+            'campaign_prior_7d_reward_rate'
+        ) as is_null_rate_breach,
+    -- No usable baseline (fewer than three prior days, or a zero baseline mean)
+    -- is not a breach. The relative move stays null in mean_drift_pct; the flag
+    -- is false so a missing baseline is a decision, not an unknown.
+    coalesce(
         b.baseline_days >= 3
         and abs(
             {{ safe_div('d.mean_value - b.baseline_mean_value', 'abs(b.baseline_mean_value)') }} * 100
-        ) > {{ var('feature_drift_threshold_pct') }}
+        ) > {{ var('feature_drift_threshold_pct') }},
+        false
     ) as is_drift_breach
 from daily d
 left join baseline b

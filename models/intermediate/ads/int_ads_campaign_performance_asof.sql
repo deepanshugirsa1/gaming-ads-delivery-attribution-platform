@@ -45,7 +45,7 @@ spine as (
         on b.request_id = r.request_id
 ),
 
-trailing as (
+prior_7d as (
     select
         s.campaign_id,
         s.as_of_date,
@@ -75,4 +75,4 @@ select
     -- rewarded product this predicts the next impression's outcome better than CTR,
     -- because finishing is the behaviour the format is built to produce.
     {{ safe_div('prior_7d_rewards', 'prior_7d_impressions') }} as prior_7d_reward_rate
-from trailing
+from prior_7d

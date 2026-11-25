@@ -65,12 +65,11 @@ vars:
 
   # Freshness SLA registry, read by mart_ads_pipeline_health.
   #
-  # Lag is measured against the latest ingest the pipeline has seen, not against
-  # wall-clock time. The dataset is static and historical, so a clock-based freshness
-  # check would report every table as permanently stale and the whole signal would be
-  # ignored. "How far behind the rest of the pipeline is this feed" is the question
-  # that still has a useful answer, and it is the one that actually catches a single
-  # feed stalling while the others keep moving.
+  # Each feed is compared to the latest ingest among feeds with an equal or tighter
+  # SLA, not to wall-clock time and not to the single newest row in the pipeline.
+  # Conversions are allowed to arrive days after the click; that late row must not
+  # mark the request and click feeds stale. A feed is late when it falls behind the
+  # feeds it is supposed to keep up with.
   source_freshness_registry:
     - {table: stg_ads_requests,       key: request_id,     event_at: requested_at,  sla_minutes: 60}
     - {table: stg_ads_auction_bids,   key: bid_id,         event_at: ingested_at,   sla_minutes: 60}

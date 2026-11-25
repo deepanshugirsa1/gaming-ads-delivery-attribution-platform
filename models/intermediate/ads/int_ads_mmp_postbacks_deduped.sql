@@ -19,6 +19,7 @@ with ranked as (
 select
     postback_id,
     mmp_name,
+    feed_contract,
     advertiser_id,
     claimed_campaign_id,
     claimed_user_id,

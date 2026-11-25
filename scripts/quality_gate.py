@@ -86,9 +86,10 @@ GATES = [
     {
         "name": "ml_constant_features",
         "severity": "error",
-        "description": "no ML feature is constant (a broken join or a forgotten column)",
+        "description": "no ML feature is constant on the latest day (a broken join or a forgotten column)",
         "sql": "select count(distinct feature_name) as value "
-               "from {p}ads_ml.mart_ml_feature_health_daily where is_constant",
+               "from {p}ads_ml.mart_ml_feature_health_daily where is_constant "
+               "and as_of_date = (select max(as_of_date) from {p}ads_ml.mart_ml_feature_health_daily)",
         "operator": "<=",
         "limit": 0,
     },

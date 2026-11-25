@@ -20,7 +20,10 @@ disagreement are correct behaviour:
     here is a measure of how much of reported performance is coincidence, which is
     the single most useful number in this whole repository.
 
-  * Out-of-window exposures going uncredited. Correct by construction.
+  * Out-of-window exposures. The touchpoint that actually caused the conversion
+    is older than the reporting window, so it does not earn credit. Another ad
+    inside the window may be credited instead; that is the window rule, not a
+    second bug.
 
 So this reports agreement, explains every disagreement it can, and fails only on
 disagreements it cannot explain -- those are real bugs in the attribution logic.
@@ -35,6 +38,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 
 import pandas as pd
@@ -44,6 +48,51 @@ import warehouse  # noqa: E402
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TRUTH = os.path.join(HERE, "data", "ads", "_ground_truth_attribution.csv.gz")
+
+
+def reporting_windows() -> tuple[float, float]:
+    """Read the windows the models actually apply, so this check cannot drift."""
+    text = open(os.path.join(HERE, "dbt_project.yml"), encoding="utf-8").read()
+
+    def grab(name: str, default: float) -> float:
+        match = re.search(rf"^{name}:\s*([0-9.]+)\s*$", text, re.M)
+        return float(match.group(1)) if match else default
+
+    return grab("click_window_days", 7), grab("view_window_days", 1)
+
+
+def truth_touchpoint_age(disagreed: pd.DataFrame, prefix: str) -> pd.Series:
+    """Days from the causing exposure to the conversion, using the model's own clock.
+
+    Candidates are collected at the wide window, so an exposure the reporting window
+    rejects is still here and its age can be compared to click_window_days /
+    view_window_days. A missing age means the exposure never became a candidate.
+    """
+    if disagreed.empty:
+        return pd.Series(dtype="float64")
+
+    ids = disagreed["conversion_id"].dropna().unique().tolist()
+    quoted = ", ".join("'" + str(i).replace("'", "''") + "'" for i in ids)
+    rows = warehouse.query(f"""
+        select conversion_id, impression_id, touchpoint_type, days_to_conversion
+        from {prefix}intermediate.int_ads_conversion_candidates
+        where conversion_id in ({quoted})
+    """)
+    ages = pd.DataFrame(rows)
+    if ages.empty:
+        return pd.Series(pd.NA, index=disagreed.index, dtype="Float64")
+
+    keyed = disagreed.reset_index()[["index", "conversion_id", "truth_impression_id", "truth_touchpoint"]]
+    found = keyed.merge(
+        ages,
+        left_on=["conversion_id", "truth_impression_id", "truth_touchpoint"],
+        right_on=["conversion_id", "impression_id", "touchpoint_type"],
+        how="left",
+    )
+    # One exposure can match one candidate. If a duplicate slips through, keep the
+    # nearest so the window comparison stays a single number per conversion.
+    found = found.sort_values("days_to_conversion").drop_duplicates("index")
+    return found.set_index("index")["days_to_conversion"].reindex(disagreed.index)
 
 
 def main() -> int:
@@ -90,29 +139,35 @@ def main() -> int:
     agreed = int(caused["agrees"].sum())
     disagreed = caused[~caused["agrees"]].copy()
 
-    # explained: last-touch legitimately picked a different, later touchpoint from the
-    # same advertiser, which is what last-touch is defined to do
-    explained_multi_touch = int(
-        (
-            (~disagreed["agrees"])
-            & disagreed["attributed_campaign_id"].notna()
-            & (disagreed["in_window_touchpoints"].fillna(0) > 1)
-        ).sum()
+    click_window, view_window = reporting_windows()
+    disagreed["truth_days_to_conversion"] = truth_touchpoint_age(disagreed, prefix)
+    click_outside = (disagreed["truth_touchpoint"] == "click") & (
+        disagreed["truth_days_to_conversion"] > click_window
     )
-    # explained: the true touchpoint fell outside the reporting window
-    explained_out_of_window = int(
-        (disagreed["attribution_outcome"] == "touchpoint_outside_window").sum()
+    view_outside = (disagreed["truth_touchpoint"] == "view") & (
+        disagreed["truth_days_to_conversion"] > view_window
     )
-    explained_no_touchpoint = int(
-        (
-            (disagreed["attribution_outcome"] == "no_touchpoint")
-            & (disagreed["wide_window_touchpoints"].fillna(0) == 0)
-        ).sum()
+    # The causing exposure itself is outside the window the models report on.
+    # Another in-window ad may still be credited; that is the window, not a bug.
+    outside_window = click_outside | view_outside
+    # Last-touch only explains a disagreement when the true touchpoint was eligible
+    # and a different in-window touchpoint won.
+    last_touch = (
+        ~outside_window
+        & disagreed["attributed_campaign_id"].notna()
+        & (disagreed["in_window_touchpoints"].fillna(0) > 1)
+    )
+    no_touchpoint = (
+        ~outside_window
+        & ~last_touch
+        & (disagreed["attribution_outcome"] == "no_touchpoint")
+        & (disagreed["wide_window_touchpoints"].fillna(0) == 0)
     )
 
-    unexplained = (
-        len(disagreed) - explained_multi_touch - explained_out_of_window - explained_no_touchpoint
-    )
+    explained_multi_touch = int(last_touch.sum())
+    explained_out_of_window = int(outside_window.sum())
+    explained_no_touchpoint = int(no_touchpoint.sum())
+    unexplained = int(len(disagreed) - explained_multi_touch - explained_out_of_window - explained_no_touchpoint)
 
     # ---- organic conversions ----
     organic = both[both["truth_touchpoint"] == "organic"]

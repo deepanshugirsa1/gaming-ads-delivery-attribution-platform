@@ -5,11 +5,13 @@
 -- because it answers the question that explains most wrong numbers: did all the data
 -- arrive, and did any of it arrive twice.
 --
--- Lag is measured against the latest ingest anywhere in the pipeline rather than
--- against the clock. For a static historical dataset a wall-clock freshness check
--- marks everything stale forever, which trains people to ignore it. Lag behind the
--- pipeline still answers the useful question -- is one feed stalling while the others
--- move -- and it keeps working when the data is a replay or a backfill.
+-- Lag is measured against the latest ingest among feeds with an equal or tighter
+-- SLA, not against the clock and not against the single latest row in the pipeline.
+-- A wall-clock check marks a historical extract stale forever. Using the global
+-- maximum does the same thing in the other direction: conversions are allowed to
+-- land days after the click, and that one late row would mark every real-time feed
+-- as hours behind. A click feed is late when it falls behind the other click-speed
+-- feeds, not when a conversion feed is still inside its own multi-day contract.
 --
 -- The SLA per feed comes from source_freshness_registry in dbt_project.yml, so adding
 -- a feed or renegotiating a threshold is a config change with a visible diff rather
@@ -32,8 +34,15 @@ with feeds as (
 ),
 
 reference as (
-    select max(latest_ingested_at) as pipeline_latest_ingested_at
-    from feeds
+    -- Peer reference: the newest ingest among feeds this one is expected to keep
+    -- up with. A looser SLA cannot set the clock for a tighter one.
+    select
+        f.feed_name,
+        max(o.latest_ingested_at) as pipeline_latest_ingested_at
+    from feeds f
+    join feeds o
+        on o.sla_minutes <= f.sla_minutes
+    group by 1
 ),
 
 orphan_clicks as (
@@ -75,6 +84,6 @@ select
     lc.max_ingest_lag_minutes                                as conversion_max_ingest_lag_minutes,
     lc.p95_ingest_lag_minutes                                as conversion_p95_ingest_lag_minutes
 from feeds f
-cross join reference r
+join reference r on f.feed_name = r.feed_name
 cross join orphan_clicks oc
 cross join late_conversions lc

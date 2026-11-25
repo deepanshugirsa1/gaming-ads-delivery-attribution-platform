@@ -72,9 +72,9 @@ models:
 
   - name: mart_ads_pipeline_health
     description: >
-      Per-feed volume, duplication and arrival lag against its SLA. Lag is measured
-      against the latest ingest in the pipeline, not the clock, so the signal still
-      works on a historical replay.
+      Per-feed volume, duplication and arrival lag against its SLA. A feed is compared
+      to the latest ingest among feeds with an equal or tighter SLA, so a late
+      conversion does not mark the request feed stale.
     columns:
       - name: feed_name
         tests: [unique, not_null]

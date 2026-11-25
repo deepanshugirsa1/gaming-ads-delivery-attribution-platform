@@ -31,7 +31,8 @@ def load(path: str):
     if not os.path.exists(full):
         return None
     try:
-        return json.load(open(full))
+        with open(full, encoding="utf-8") as fh:
+            return json.load(fh)
     except (json.JSONDecodeError, OSError):
         return None
 
@@ -61,7 +62,10 @@ def main() -> int:
         passed = counts.get("success", 0) + counts.get("pass", 0)
         failed = counts.get("fail", 0) + counts.get("error", 0)
         elapsed = run_results.get("elapsed_time")
-        target = (run_results.get("args", {}) or {}).get("target", "unknown")
+        target = (run_results.get("args", {}) or {}).get("target")
+        if not target:
+            manifest_dbt = load(os.path.join("target", "manifest.json")) or {}
+            target = (manifest_dbt.get("metadata") or {}).get("adapter_type") or "unknown"
 
         lines.append(f"**Last `dbt build`** — target `{target}`, dbt "
                      f"{run_results.get('metadata', {}).get('dbt_version', '?')}, "
@@ -109,14 +113,15 @@ def main() -> int:
                  f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC. "
                  f"No number here is typed by hand.</sub>")
 
-    body = open(README).read()
+    body = open(README, encoding="utf-8").read()
     if START not in body or END not in body:
         print(f"  README is missing the {START} / {END} markers")
         return 1
 
     head, rest = body.split(START, 1)
     _, tail = rest.split(END, 1)
-    open(README, "w").write(head + START + "\n" + "\n".join(lines) + "\n" + END + tail)
+    with open(README, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(head + START + "\n" + "\n".join(lines) + "\n" + END + tail)
 
     print("  README stats block updated")
     for line in lines[:6]:
